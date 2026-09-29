@@ -1,0 +1,29 @@
+# Optional merge file: adds new-api (API distribution gateway) next to cli-proxy-api.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.newapi.yaml up -d
+#
+# After first start, run scripts/newapi-bootstrap.sh to create the
+# cli-proxy-api channel inside new-api automatically (or do it in the UI).
+services:
+  new-api:
+    image: ${NEW_API_IMAGE:-calciumion/new-api:latest}
+    pull_policy: always
+    # Uncomment to build from the vendored new-api/ source instead of pulling:
+    # build:
+    #   context: ./new-api
+    container_name: new-api
+    environment:
+      # Empty SQL_DSN = bundled SQLite stored in the data volume.
+      SQL_DSN: ${NEW_API_SQL_DSN:-}
+      REDIS_CONN_STRING: ${NEW_API_REDIS_CONN_STRING:-}
+      SESSION_SECRET: ${NEW_API_SESSION_SECRET:-}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${NEW_API_PORT:-3000}:3000"
+    volumes:
+      - ${NEW_API_DATA_PATH:-./data/new-api}:/data
+      - ${NEW_API_LOG_PATH:-./logs/new-api}:/data/logs
+    depends_on:
+      - cli-proxy-api
+    restart: unless-stopped

@@ -65,6 +65,15 @@ cd .. && go build -o new-api .
 
 Point its channels at `http://127.0.0.1:8317` with a CLIProxyAPI client key to chain billing/account management through this proxy's upstream pool.
 
+Docker option — run both behind one command and let the bootstrap script wire the channel automatically:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.newapi.yaml up -d
+CLIPROXY_KEY=<one access.api-keys entry> NEW_API_BOOTSTRAP_TOKEN=1 ./scripts/newapi-bootstrap.sh
+```
+
+See [docs/new-api-integration.md](docs/new-api-integration.md) for bootstrap variables, manual UI setup, and production notes.
+
 ## Docs
 
 - Config template: [config.example.yaml](config.example.yaml)
