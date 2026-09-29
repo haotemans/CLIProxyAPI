@@ -1,0 +1,891 @@
+name: Build and Release
+
+run-name: >-
+  Build and Release · ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'tag' }} · ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag, for example v1.12.0-rc.1'
+        required: true
+        type: string
+      mode:
+        description: 'Validate only, or publish the exact main commit after a successful dry-run'
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - publish
+      expected_sha:
+        description: 'Exact main commit SHA; required for publish and optional for dry-run'
+        required: false
+        type: string
+      dry_run_id:
+        description: 'Successful Build and Release dry-run ID for the same version and main SHA; required for publish'
+        required: false
+        type: string
+      confirm_publish:
+        description: 'Create the release tag and publish after all guards pass'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Release preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release_tag: ${{ steps.context.outputs.release_tag }}
+      release_version: ${{ steps.context.outputs.release_version }}
+      release_mode: ${{ steps.context.outputs.release_mode }}
+      dry_run: ${{ steps.context.outputs.dry_run }}
+      prerelease: ${{ steps.context.outputs.prerelease }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve release context
+        id: context
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            if [ "${EVENT_REF}" != "refs/heads/main" ]; then
+              echo "Release dispatch must run from main; received ${EVENT_REF}." >&2
+              exit 1
+            fi
+            release_tag="${INPUT_VERSION}"
+            release_mode="${INPUT_MODE:-dry-run}"
+            case "${release_mode}" in
+              dry-run)
+                dry_run=true
+                ;;
+              publish)
+                dry_run=false
+                ;;
+              *)
+                echo "Unsupported release dispatch mode: ${release_mode}" >&2
+                exit 1
+                ;;
+            esac
+          else
+            release_tag="${EVENT_REF_NAME}"
+            release_mode=tag
+            dry_run=false
+          fi
+
+          prerelease="$(node --input-type=module - "${release_tag}" <<'NODE'
+          import { parseReleaseTag } from './bin/release/validate-release.mjs';
+
+          try {
+            process.stdout.write(String(parseReleaseTag(process.argv[2]).prerelease));
+          } catch (error) {
+            console.error(error instanceof Error ? error.message : String(error));
+            process.exit(1);
+          }
+          NODE
+          )"
+          release_version="${release_tag#v}"
+
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "release_version=${release_version}" >> "${GITHUB_OUTPUT}"
+          echo "release_mode=${release_mode}" >> "${GITHUB_OUTPUT}"
+          echo "dry_run=${dry_run}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+
+      - name: Fetch protected branch refs
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            +refs/heads/main:refs/remotes/origin/main \
+            +refs/heads/dev:refs/remotes/origin/dev
+
+      - name: Validate release content and provenance
+        env:
+          RELEASE_TAG: ${{ steps.context.outputs.release_tag }}
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_MODE: ${{ steps.context.outputs.release_mode }}
+          DRY_RUN: ${{ steps.context.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          validation_args=(
+            --tag "${RELEASE_TAG}"
+            --sha "${RELEASE_SHA}"
+            --main-ref origin/main
+            --dev-ref origin/dev
+          )
+          if [ "${DRY_RUN}" = "true" ] || [ "${RELEASE_MODE}" = "publish" ]; then
+            validation_args+=(--dry-run)
+          fi
+          npm run --silent release:validate -- "${validation_args[@]}"
+
+  release_gate:
+    name: Authorize release tag and publish mode
+    needs: preflight
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      RELEASE_MODE: ${{ needs.preflight.outputs.release_mode }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_SHA: ${{ github.sha }}
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      DRY_RUN_ID: ${{ inputs.dry_run_id }}
+      CONFIRM_PUBLISH: ${{ inputs.confirm_publish }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Authorize exact release ref
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node bin/release/authorize-release-dispatch.mjs
+
+  build_release_assets:
+    name: Build release assets
+    needs:
+      - preflight
+      - release_gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.24.x'
+          cache-dependency-path: apps/manager-server/go.sum
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all-in-one HTML
+        # Fail before building if the reviewed release metadata is absent.
+        run: |
+          node bin/release/generate-release-info.mjs "${RELEASE_TAG}"
+          npm run build
+        env:
+          VERSION: ${{ needs.preflight.outputs.release_tag }}
+
+      - name: Check demo isolation
+        run: npm run check:demo-isolation
+
+      - name: Build native release packages
+        run: bin/release/package-native.sh
+        env:
+          VERSION: ${{ needs.preflight.outputs.release_tag }}
+
+      - name: Prepare release artifact
+        run: |
+          set -euo pipefail
+          rm -rf dist/release
+          mkdir -p dist/release/native
+          cp apps/web/dist/index.html dist/release/management.html
+          cp dist/native/* dist/release/native/
+          cp "docs/release-notes/${RELEASE_TAG}-zh.md" dist/release/release-notes.md
+          node bin/release/generate-release-info.mjs "${RELEASE_TAG}" dist/release/release-info.json
+          find dist/release -maxdepth 2 -type f -print | sort
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets-${{ needs.preflight.outputs.release_tag }}
+          path: dist/release
+          if-no-files-found: error
+          retention-days: 7
+
+  inspect_github_release:
+    name: Inspect GitHub Release state
+    needs:
+      - preflight
+      - build_release_assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      publish: ${{ steps.release_state.outputs.publish }}
+      finalize: ${{ steps.release_state.outputs.finalize }}
+      release_id: ${{ steps.prepared_release.outputs.release_id }}
+      state: ${{ steps.release_state.outputs.state }}
+      upload_files: ${{ steps.release_state.outputs.upload_files }}
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      DRY_RUN: ${{ needs.preflight.outputs.dry_run }}
+
+    steps:
+      - name: Checkout release source
+        if: env.DRY_RUN != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download release artifact
+        if: env.DRY_RUN != 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets-${{ needs.preflight.outputs.release_tag }}
+          path: dist/release
+
+      - name: Resolve GitHub Release state
+        id: release_state
+        shell: bash
+        env:
+          EXPECTED_PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+            echo "finalize=false" >> "${GITHUB_OUTPUT}"
+            echo "release_id=" >> "${GITHUB_OUTPUT}"
+            echo "state=none" >> "${GITHUB_OUTPUT}"
+            echo "upload_files=" >> "${GITHUB_OUTPUT}"
+            echo "Dry-run does not inspect or publish a GitHub Release." >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          all_upload_files="$(node --input-type=module - "${RELEASE_TAG}" <<'NODE'
+          import { buildExpectedReleaseAssets } from './bin/release/verify-published-release.mjs';
+
+          const assets = buildExpectedReleaseAssets('dist/release', process.argv[2]);
+          process.stdout.write(assets.map(({ filePath }) => filePath).join('\n'));
+          NODE
+          )"
+          write_upload_files() {
+            {
+              echo "upload_files<<EOF"
+              printf '%s\n' "$1"
+              echo "EOF"
+            } >> "${GITHUB_OUTPUT}"
+          }
+
+          release_json="${RUNNER_TEMP}/existing-release.json"
+          http_code="$(curl \
+            --silent \
+            --show-error \
+            --output "${release_json}" \
+            --write-out "%{http_code}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+
+          if [ "${http_code}" = "404" ]; then
+            release_list_json="${RUNNER_TEMP}/release-list.json"
+            release_list_code="$(curl \
+              --silent \
+              --show-error \
+              --output "${release_list_json}" \
+              --write-out "%{http_code}" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases?per_page=100")"
+            case "${release_list_code}" in
+              200)
+                matching_release_count="$(jq --arg tag "${RELEASE_TAG}" \
+                  'map(select(.tag_name == $tag)) | length' \
+                  "${release_list_json}")"
+                if [ "${matching_release_count}" -gt 1 ]; then
+                  echo "GitHub Release list contains multiple entries for ${RELEASE_TAG}." >&2
+                  exit 1
+                fi
+                jq -c --arg tag "${RELEASE_TAG}" \
+                  'map(select(.tag_name == $tag)) | if length == 1 then .[0] else empty end' \
+                  "${release_list_json}" > "${release_json}"
+                if [ -s "${release_json}" ]; then
+                  http_code=200
+                fi
+                ;;
+              *)
+                echo "GitHub Release list lookup failed with HTTP ${release_list_code}." >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          case "${http_code}" in
+            200)
+              release_id="$(jq -r '.id' "${release_json}")"
+              if ! [[ "${release_id}" =~ ^[1-9][0-9]*$ ]]; then
+                echo "GitHub Release response has an invalid id: ${release_id}." >&2
+                exit 1
+              fi
+              echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
+              is_draft="$(jq -r '.draft' "${release_json}")"
+              verification_mode=artifact
+              if [ "${is_draft}" = "true" ]; then
+                verification_mode=draft
+              elif [ "${is_draft}" != "false" ]; then
+                echo "GitHub Release response has an invalid draft value: ${is_draft}." >&2
+                exit 1
+              fi
+              allow_missing=false
+              if [ "${verification_mode}" = "draft" ] || [ "${RUN_ATTEMPT}" -gt 1 ]; then
+                allow_missing=true
+              fi
+              verification_json="${RUNNER_TEMP}/release-verification.json"
+              node bin/release/verify-published-release.mjs \
+                --tag "${RELEASE_TAG}" \
+                --assets-dir dist/release \
+                --body-path dist/release/release-notes.md \
+                --release-json "${release_json}" \
+                --prerelease "${EXPECTED_PRERELEASE}" \
+                --mode "${verification_mode}" \
+                --allow-missing-assets "${allow_missing}" \
+                --result-path "${verification_json}"
+              complete="$(node --input-type=module -e '
+                import { readFileSync } from "node:fs";
+
+                const result = JSON.parse(readFileSync(process.argv[1], "utf8"));
+                process.stdout.write(String(result.complete));
+              ' "${verification_json}")"
+              echo "state=${verification_mode}" >> "${GITHUB_OUTPUT}"
+              if [ "${verification_mode}" = "draft" ]; then
+                echo "finalize=true" >> "${GITHUB_OUTPUT}"
+              else
+                echo "finalize=false" >> "${GITHUB_OUTPUT}"
+              fi
+              if [ "${complete}" = "true" ]; then
+                if [ "${verification_mode}" = "draft" ]; then
+                  echo "publish=true" >> "${GITHUB_OUTPUT}"
+                  echo "upload_files=" >> "${GITHUB_OUTPUT}"
+                  echo "A complete draft GitHub Release is ready for publication." >> "${GITHUB_STEP_SUMMARY}"
+                else
+                  echo "publish=false" >> "${GITHUB_OUTPUT}"
+                  echo "upload_files=" >> "${GITHUB_OUTPUT}"
+                  echo "Existing GitHub Release matches the checked payload; upload skipped." >> "${GITHUB_STEP_SUMMARY}"
+                fi
+              else
+                missing_upload_files="$(node --input-type=module -e '
+                  import { readFileSync } from "node:fs";
+
+                  const result = JSON.parse(readFileSync(process.argv[1], "utf8"));
+                  process.stdout.write(result.missingAssets.map(({ filePath }) => filePath).join("\n"));
+                ' "${verification_json}")"
+                echo "publish=true" >> "${GITHUB_OUTPUT}"
+                write_upload_files "${missing_upload_files}"
+                if [ "${verification_mode}" = "draft" ]; then
+                  echo "Existing draft assets will be preserved; only missing assets will be uploaded before publication." >> "${GITHUB_STEP_SUMMARY}"
+                else
+                  echo "Existing matching assets will be preserved; only missing assets will be uploaded." >> "${GITHUB_STEP_SUMMARY}"
+                fi
+              fi
+              ;;
+            404)
+              echo "publish=true" >> "${GITHUB_OUTPUT}"
+              echo "finalize=true" >> "${GITHUB_OUTPUT}"
+              echo "release_id=" >> "${GITHUB_OUTPUT}"
+              echo "state=missing" >> "${GITHUB_OUTPUT}"
+              write_upload_files "${all_upload_files}"
+              ;;
+            *)
+              echo "GitHub Release lookup failed with HTTP ${http_code}." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Create or update draft GitHub Release
+        id: draft_release
+        if: env.DRY_RUN != 'true' && steps.release_state.outputs.finalize == 'true' && steps.release_state.outputs.upload_files != ''
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          tag_name: ${{ needs.preflight.outputs.release_tag }}
+          files: ${{ steps.release_state.outputs.upload_files }}
+          body_path: dist/release/release-notes.md
+          draft: true
+          prerelease: ${{ needs.preflight.outputs.prerelease == 'true' }}
+          overwrite_files: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload missing assets to existing mutable Release
+        id: published_release
+        if: env.DRY_RUN != 'true' && steps.release_state.outputs.state == 'artifact' && steps.release_state.outputs.upload_files != ''
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          tag_name: ${{ needs.preflight.outputs.release_tag }}
+          files: ${{ steps.release_state.outputs.upload_files }}
+          body_path: dist/release/release-notes.md
+          draft: false
+          prerelease: ${{ needs.preflight.outputs.prerelease == 'true' }}
+          overwrite_files: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve prepared GitHub Release id
+        id: prepared_release
+        if: env.DRY_RUN != 'true'
+        shell: bash
+        env:
+          DRAFT_RELEASE_ID: ${{ steps.draft_release.outputs.id }}
+          EXISTING_RELEASE_ID: ${{ steps.release_state.outputs.release_id }}
+          PUBLISHED_RELEASE_ID: ${{ steps.published_release.outputs.id }}
+        run: |
+          set -euo pipefail
+          release_id=""
+          for candidate in "${EXISTING_RELEASE_ID}" "${DRAFT_RELEASE_ID}" "${PUBLISHED_RELEASE_ID}"; do
+            if [ -z "${candidate}" ]; then
+              continue
+            fi
+            if ! [[ "${candidate}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "GitHub Release action returned an invalid id: ${candidate}." >&2
+              exit 1
+            fi
+            if [ -n "${release_id}" ] && [ "${release_id}" != "${candidate}" ]; then
+              echo "GitHub Release id changed during preparation: ${release_id} -> ${candidate}." >&2
+              exit 1
+            fi
+            release_id="${candidate}"
+          done
+          if [ -z "${release_id}" ]; then
+            echo "Prepared GitHub Release id is missing." >&2
+            exit 1
+          fi
+          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify prepared draft Release
+        if: env.DRY_RUN != 'true' && steps.release_state.outputs.finalize == 'true'
+        shell: bash
+        env:
+          EXPECTED_PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.prepared_release.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          release_json="${RUNNER_TEMP}/prepared-draft-release.json"
+          http_code="$(curl \
+            --silent \
+            --show-error \
+            --output "${release_json}" \
+            --write-out "%{http_code}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}")"
+          if [ "${http_code}" != "200" ]; then
+            echo "GitHub Release lookup after draft upload failed with HTTP ${http_code} for id ${RELEASE_ID}." >&2
+            exit 1
+          fi
+          node bin/release/verify-published-release.mjs \
+            --tag "${RELEASE_TAG}" \
+            --assets-dir dist/release \
+            --body-path dist/release/release-notes.md \
+            --release-json "${release_json}" \
+            --prerelease "${EXPECTED_PRERELEASE}" \
+            --mode draft \
+            --allow-missing-assets false
+
+      - name: Verify completed mutable Release upload
+        if: env.DRY_RUN != 'true' && steps.release_state.outputs.state == 'artifact' && steps.release_state.outputs.upload_files != ''
+        shell: bash
+        env:
+          EXPECTED_PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.prepared_release.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          release_json="${RUNNER_TEMP}/prepared-published-release.json"
+          http_code="$(curl \
+            --silent \
+            --show-error \
+            --output "${release_json}" \
+            --write-out "%{http_code}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}")"
+          if [ "${http_code}" != "200" ]; then
+            echo "Published GitHub Release lookup after asset upload failed with HTTP ${http_code} for id ${RELEASE_ID}." >&2
+            exit 1
+          fi
+          node bin/release/verify-published-release.mjs \
+            --tag "${RELEASE_TAG}" \
+            --assets-dir dist/release \
+            --body-path dist/release/release-notes.md \
+            --release-json "${release_json}" \
+            --prerelease "${EXPECTED_PRERELEASE}" \
+            --allow-missing-assets false
+
+  build_and_push_docker:
+    name: Build and publish Docker images
+    needs:
+      - preflight
+      - build_release_assets
+      - inspect_github_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+      RELEASE_SHA: ${{ github.sha }}
+      DRY_RUN: ${{ needs.preflight.outputs.dry_run }}
+      DOCKERHUB_IMAGE: seakee/cpa-manager-plus
+      GHCR_IMAGE: ghcr.io/seakee/cpa-manager-plus
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Prepare Docker publish targets
+        id: docker_targets
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ "${DOCKERHUB_IMAGE}" != "seakee/cpa-manager-plus" ]; then
+            echo "Docker image name must be seakee/cpa-manager-plus" >&2
+            exit 1
+          fi
+
+          images="${GHCR_IMAGE}"
+          dockerhub_enabled=false
+          if [ "${DRY_RUN}" != "true" ] && [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
+            images="${images}"$'\n'"${DOCKERHUB_IMAGE}"
+            dockerhub_enabled=true
+          elif [ "${DRY_RUN}" != "true" ]; then
+            echo "::warning::DockerHub credentials are not both configured; DockerHub publish will be skipped."
+          fi
+
+          {
+            echo "images<<EOF"
+            echo "${images}"
+            echo "EOF"
+            echo "dockerhub_enabled=${dockerhub_enabled}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Login to GitHub Container Registry
+        if: env.DRY_RUN != 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: env.DRY_RUN != 'true' && steps.docker_targets.outputs.dockerhub_enabled == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.docker_targets.outputs.images }}
+          tags: |
+            type=raw,value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+          flavor: |
+            latest=false
+          labels: |
+            org.opencontainers.image.title=CPA Manager Plus
+            org.opencontainers.image.description=CPA Manager Plus Manager Server container image
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}#readme
+            org.opencontainers.image.revision=${{ env.RELEASE_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+
+      - name: Build and publish Manager Server image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile.manager-server
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.DRY_RUN != 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ env.RELEASE_TAG }}
+            SOURCE_COMMIT=${{ env.RELEASE_SHA }}
+
+      - name: Verify published release image provenance
+        if: env.DRY_RUN != 'true'
+        shell: bash
+        env:
+          PUBLISHED_IMAGES: ${{ steps.docker_targets.outputs.images }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { verifyImage } from './bin/release/publish-update-index.mjs';
+
+          const images = process.env.PUBLISHED_IMAGES.split(/\r?\n/).filter(Boolean);
+          const info = {
+            release: {
+              version: process.env.RELEASE_TAG,
+              source_commit: process.env.RELEASE_SHA,
+            },
+          };
+          let expectedDigest = null;
+          for (const image of images) {
+            const inspected = JSON.parse(
+              execFileSync(
+                'docker',
+                ['buildx', 'imagetools', 'inspect', `${image}:${process.env.RELEASE_TAG}`, '--format', '{{json .}}'],
+                { encoding: 'utf8' }
+              )
+            );
+            const digest = verifyImage(inspected, info);
+            if (expectedDigest && digest !== expectedDigest) {
+              throw new Error(`Registry digest mismatch: ${process.env.RELEASE_TAG}`);
+            }
+            expectedDigest = digest;
+            console.log(`${image}:${process.env.RELEASE_TAG} -> ${digest}`);
+          }
+          NODE
+
+      - name: Update DockerHub overview
+        if: env.DRY_RUN != 'true' && steps.docker_targets.outputs.dockerhub_enabled == 'true'
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_IMAGE }}
+          short-description: CPA Manager Plus with Dockerized Manager Server
+          readme-filepath: ./README.md
+
+  publish_github_release:
+    name: Publish GitHub Release
+    needs:
+      - preflight
+      - build_release_assets
+      - inspect_github_release
+      - build_and_push_docker
+    if: needs.preflight.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+
+    steps:
+      - name: Checkout release source
+        if: needs.inspect_github_release.outputs.publish == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download release artifact
+        if: needs.inspect_github_release.outputs.publish == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets-${{ needs.preflight.outputs.release_tag }}
+          path: dist/release
+
+      - name: Verify downloaded release artifact
+        if: needs.inspect_github_release.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          test -s dist/release/management.html
+          test -s dist/release/release-notes.md
+          test -n "$(find dist/release/native -type f -maxdepth 1 -print -quit)"
+
+      - name: Reuse matching GitHub Release
+        if: needs.inspect_github_release.outputs.publish != 'true'
+        run: echo "Existing GitHub Release already matches the checked payload." >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Publish verified draft GitHub Release
+        if: needs.inspect_github_release.outputs.publish == 'true' && needs.inspect_github_release.outputs.finalize == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+          RELEASE_ID: ${{ needs.inspect_github_release.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          release_json="${RUNNER_TEMP}/draft-release.json"
+          http_code="$(curl \
+            --silent \
+            --show-error \
+            --output "${release_json}" \
+            --write-out "%{http_code}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}")"
+          if [ "${http_code}" != "200" ]; then
+            echo "Draft GitHub Release lookup failed with HTTP ${http_code} for id ${RELEASE_ID}." >&2
+            exit 1
+          fi
+
+          node bin/release/verify-published-release.mjs \
+            --tag "${RELEASE_TAG}" \
+            --assets-dir dist/release \
+            --body-path dist/release/release-notes.md \
+            --release-json "${release_json}" \
+            --prerelease "${EXPECTED_PRERELEASE}" \
+            --mode draft \
+            --allow-missing-assets false
+
+          release_id="$(jq -r '.id' "${release_json}")"
+          if [ "${release_id}" != "${RELEASE_ID}" ]; then
+            echo "Draft GitHub Release id changed during publication: ${RELEASE_ID} -> ${release_id}." >&2
+            exit 1
+          fi
+          publish_payload="$(jq -cn --argjson prerelease "${EXPECTED_PRERELEASE}" '{draft: false, prerelease: $prerelease, make_latest: "false"}')"
+          publish_json="${RUNNER_TEMP}/published-release.json"
+          publish_code="$(curl \
+            --silent \
+            --show-error \
+            --output "${publish_json}" \
+            --write-out "%{http_code}" \
+            --request PATCH \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --header "Content-Type: application/json" \
+            --data "${publish_payload}" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/${release_id}")"
+          if [ "${publish_code}" != "200" ]; then
+            echo "Publishing the verified draft GitHub Release failed with HTTP ${publish_code}." >&2
+            exit 1
+          fi
+
+          node bin/release/verify-published-release.mjs \
+            --tag "${RELEASE_TAG}" \
+            --assets-dir dist/release \
+            --body-path dist/release/release-notes.md \
+            --release-json "${publish_json}" \
+            --prerelease "${EXPECTED_PRERELEASE}" \
+            --allow-missing-assets false
+
+          echo "Verified draft GitHub Release published after all assets were uploaded." >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Verify existing published GitHub Release
+        if: needs.inspect_github_release.outputs.publish == 'true' && needs.inspect_github_release.outputs.finalize != 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+          RELEASE_ID: ${{ needs.inspect_github_release.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          release_json="${RUNNER_TEMP}/published-release.json"
+          http_code="$(curl \
+            --silent \
+            --show-error \
+            --output "${release_json}" \
+            --write-out "%{http_code}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}")"
+          if [ "${http_code}" != "200" ]; then
+            echo "Published GitHub Release lookup failed with HTTP ${http_code} for id ${RELEASE_ID}." >&2
+            exit 1
+          fi
+          node bin/release/verify-published-release.mjs \
+            --tag "${RELEASE_TAG}" \
+            --assets-dir dist/release \
+            --body-path dist/release/release-notes.md \
+            --release-json "${release_json}" \
+            --prerelease "${EXPECTED_PRERELEASE}" \
+            --allow-missing-assets false
+
+  publish_update_index:
+    needs: [preflight, publish_github_release]
+    if: needs.preflight.outputs.dry_run != 'true'
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/update-index-publish.yml
+    secrets: inherit
+
+  notify_telegram:
+    name: Notify Telegram
+    needs:
+      - preflight
+      - publish_github_release
+      - publish_update_index
+    if: needs.preflight.outputs.dry_run != 'true' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Send Telegram release notification
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
+        run: bash bin/release/send-telegram-release.sh

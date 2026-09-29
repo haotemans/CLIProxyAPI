@@ -71,4 +71,4 @@ data/*
 .llm-wiki
 
 # Local cross-build artifacts
-cli-proxy-api-*
+/cli-proxy-api-*

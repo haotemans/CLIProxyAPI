@@ -1,0 +1,1894 @@
+import { describe, expect, it } from 'vitest';
+import type { TFunction } from 'i18next';
+import type { AuthFileItem, CodexQuotaState, CredentialScopedQuotaState } from '@/types';
+import type { MonitoringAccountWindowUsageItem } from '@/services/api';
+import { buildAccountRows, type AccountQuotaStores } from './accountRows';
+import {
+  buildAccountQuotaDisplayWindow,
+  buildAccountQuotaDisplayWindows,
+  getAccountQuotaSemanticGroup,
+  getQuotaWindowShortLabel,
+  isIntervalAccountQuotaWindow,
+  isModelScopedAccountQuotaWindow,
+  isStandardAccountQuotaListWindow,
+  parseQuotaResetLabelMs,
+  type TranslateQuotaWindowLabel,
+} from './accountQuotaDisplayWindows';
+import {
+  buildQuotaCredentialIdentity,
+  getQuotaCredentialStoreKey,
+} from '@/utils/quota/credentialScope';
+import { buildAccountDetailViewModel } from './accountDetailViewModel';
+import { buildAccountQuotaWindowDefinitions } from './accountQuotaWindowDefinitions';
+import { accountWindowUsageRequestKey } from './accountWindowUsageRows';
+
+const emptyStores = (): AccountQuotaStores => ({
+  antigravityQuota: {},
+  claudeQuota: {},
+  codexQuota: {},
+  devinQuota: {},
+  kimiQuota: {},
+  metaQuota: {},
+  xaiQuota: {},
+});
+
+const t = ((key: string, options?: Record<string, string | number>) => {
+  const translations: Record<string, string> = {
+    'antigravity_quota.group_gemini_models': 'Gemini models',
+    'antigravity_quota.daily_limit': 'Daily limit',
+    'claude_quota.extra_usage_label': 'Extra Usage',
+    'devin_quota.daily': 'Daily limit',
+    'devin_quota.weekly': 'Weekly limit',
+    'kimi_quota.reset_hint': `resets in ${options?.hint ?? ''}`,
+    'kimi_quota.weekly_limit': 'Weekly limit',
+    'xai_quota.weekly_credits': 'Weekly credits',
+    'xai_quota.monthly_credits': 'Monthly credits',
+    'xai_quota.pay_as_you_go_label': 'Pay-as-you-go',
+    'xai_quota.usage_amount': `${options?.remaining ?? '--'} / ${options?.limit ?? '--'} remaining`,
+    'accounts.col_quota': 'Quota',
+  };
+  return translations[key] ?? key;
+}) as TFunction;
+
+const translateQuotaWindowLabel: TranslateQuotaWindowLabel = (label, labelKey, labelParams) =>
+  labelKey ? t(labelKey, labelParams) : (label ?? 'Quota');
+
+const buildRow = (file: AuthFileItem, stores: AccountQuotaStores = emptyStores()) => {
+  const records = [
+    stores.antigravityQuota,
+    stores.claudeQuota,
+    stores.codexQuota,
+    stores.devinQuota,
+    stores.kimiQuota,
+    stores.metaQuota,
+    stores.xaiQuota,
+  ] as Array<Record<string, CredentialScopedQuotaState>>;
+  records.forEach((record) => {
+    const legacy = record[file.name];
+    if (!legacy) return;
+    const identity = buildQuotaCredentialIdentity(file);
+    const storeKey = legacy.authFileKey || getQuotaCredentialStoreKey(file);
+    record[storeKey] = { ...legacy, ...identity, authFileKey: storeKey };
+  });
+  return buildAccountRows([file], stores)[0];
+};
+
+describe('accountQuotaDisplayWindows', () => {
+  describe('quota window classification', () => {
+    it.each(['fixed', 'calendar', 'rolling'] as const)(
+      'classifies an account-wide %s window as standard quota',
+      (windowMode) => {
+        const window = {
+          windowMode,
+          source: 'claude' as const,
+          modelScope: { kind: 'all' as const, complete: true },
+        };
+
+        expect(isIntervalAccountQuotaWindow(window)).toBe(true);
+        expect(isModelScopedAccountQuotaWindow(window)).toBe(false);
+        expect(isStandardAccountQuotaListWindow(window)).toBe(true);
+      }
+    );
+
+    it.each([
+      { kind: 'models' as const, models: ['gemini-3-pro'], complete: true },
+      { kind: 'family' as const, key: 'gemini', complete: true },
+    ])('classifies an explicitly model-scoped fixed window as model quota', (modelScope) => {
+      const window = { windowMode: 'fixed' as const, source: 'antigravity' as const, modelScope };
+
+      expect(isIntervalAccountQuotaWindow(window)).toBe(true);
+      expect(isModelScopedAccountQuotaWindow(window)).toBe(true);
+      expect(isStandardAccountQuotaListWindow(window)).toBe(false);
+    });
+
+    it('keeps the complete Codex main family in standard quota', () => {
+      const window = {
+        windowMode: 'fixed' as const,
+        source: 'codex' as const,
+        modelScope: { kind: 'family' as const, key: 'codex_main', complete: true },
+      };
+
+      expect(isModelScopedAccountQuotaWindow(window)).toBe(false);
+      expect(isStandardAccountQuotaListWindow(window)).toBe(true);
+    });
+
+    it.each([
+      { kind: 'billing' as const, windowMode: 'non_window' as const },
+      { kind: 'payg' as const, windowMode: 'non_window' as const },
+      { kind: 'product' as const, windowMode: 'non_window' as const },
+      { kind: 'unknown' as const, windowMode: 'unknown' as const },
+    ])('does not classify a $kind $windowMode item as standard quota', ({ kind, windowMode }) => {
+      const window = {
+        kind,
+        windowMode,
+        source: 'xai' as const,
+        modelScope: { kind: 'all' as const, complete: true },
+      };
+
+      expect(isIntervalAccountQuotaWindow(window)).toBe(false);
+      expect(isStandardAccountQuotaListWindow(window)).toBe(false);
+    });
+
+    it('keeps a fixed billing interval out of the list while retaining interval semantics', () => {
+      const window = {
+        kind: 'billing' as const,
+        windowMode: 'fixed' as const,
+        source: 'xai' as const,
+        modelScope: { kind: 'all' as const, complete: true },
+      };
+
+      expect(isIntervalAccountQuotaWindow(window)).toBe(true);
+      expect(isStandardAccountQuotaListWindow(window)).toBe(false);
+    });
+
+    it('fails closed when a provider reports an incomplete account-wide scope', () => {
+      const window = {
+        windowMode: 'fixed' as const,
+        source: 'antigravity' as const,
+        modelScope: { kind: 'all' as const, complete: false },
+      };
+
+      expect(isModelScopedAccountQuotaWindow(window)).toBe(true);
+      expect(isStandardAccountQuotaListWindow(window)).toBe(false);
+    });
+
+    it('classifies unknown-boundary weekly account-wide window as standard semantic group while failing closed for intervals', () => {
+      const window = {
+        kind: 'weekly' as const,
+        windowMode: 'unknown' as const,
+        source: 'kimi' as const,
+        modelScope: { kind: 'all' as const, complete: true },
+      };
+
+      expect(getAccountQuotaSemanticGroup(window)).toBe('standard');
+      expect(isIntervalAccountQuotaWindow(window)).toBe(false);
+      expect(isStandardAccountQuotaListWindow(window)).toBe(false);
+    });
+
+    it('classifies unknown-boundary weekly model-scoped window as model semantic group', () => {
+      const window = {
+        kind: 'weekly' as const,
+        windowMode: 'unknown' as const,
+        source: 'codex' as const,
+        modelScope: { kind: 'models' as const, models: ['gpt-5'], complete: true },
+      };
+
+      expect(getAccountQuotaSemanticGroup(window)).toBe('model');
+    });
+
+    it('classifies an explicit unknown fixed account-wide interval as standard quota', () => {
+      const window = {
+        kind: 'unknown' as const,
+        windowMode: 'fixed' as const,
+        source: 'antigravity' as const,
+        modelScope: { kind: 'all' as const, complete: true },
+      };
+
+      expect(isIntervalAccountQuotaWindow(window)).toBe(true);
+      expect(getAccountQuotaSemanticGroup(window)).toBe('standard');
+      expect(isStandardAccountQuotaListWindow(window)).toBe(true);
+    });
+
+    it('classifies an explicit unknown fixed model-scoped interval as model quota', () => {
+      const window = {
+        kind: 'unknown' as const,
+        windowMode: 'fixed' as const,
+        source: 'antigravity' as const,
+        modelScope: { kind: 'family' as const, key: 'gemini', complete: true },
+      };
+
+      expect(isIntervalAccountQuotaWindow(window)).toBe(true);
+      expect(getAccountQuotaSemanticGroup(window)).toBe('model');
+      expect(isStandardAccountQuotaListWindow(window)).toBe(false);
+    });
+
+    it('keeps an explicit unknown kind without a reliable interval as other quota', () => {
+      const window = {
+        kind: 'unknown' as const,
+        windowMode: 'unknown' as const,
+        source: 'antigravity' as const,
+        modelScope: { kind: 'all' as const, complete: true },
+      };
+
+      expect(isIntervalAccountQuotaWindow(window)).toBe(false);
+      expect(getAccountQuotaSemanticGroup(window)).toBe('other');
+    });
+
+    it('classifies fixed billing window as other semantic group without entering standard quota', () => {
+      const window = {
+        kind: 'billing' as const,
+        windowMode: 'fixed' as const,
+        source: 'xai' as const,
+        modelScope: { kind: 'all' as const, complete: true },
+      };
+
+      expect(getAccountQuotaSemanticGroup(window)).toBe('other');
+      expect(isIntervalAccountQuotaWindow(window)).toBe(true);
+      expect(isStandardAccountQuotaListWindow(window)).toBe(false);
+    });
+
+    it('retains backward compatibility by classifying undefined kind with fixed interval as standard semantic group', () => {
+      const window = {
+        windowMode: 'fixed' as const,
+        source: 'kimi' as const,
+        modelScope: { kind: 'all' as const, complete: true },
+      };
+
+      expect(getAccountQuotaSemanticGroup(window)).toBe('standard');
+    });
+  });
+
+  it('rolls legacy yearless reset labels into the next calendar year', () => {
+    const nowMs = new Date(2026, 11, 31, 23, 0, 0, 0).getTime();
+
+    expect(parseQuotaResetLabelMs('01/01 01:30', nowMs)).toBe(
+      new Date(2027, 0, 1, 1, 30, 0, 0).getTime()
+    );
+    expect(parseQuotaResetLabelMs('02/31 10:00', nowMs)).toBeNull();
+  });
+
+  it('parses ambiguous legacy reset labels using the formatter locale order', () => {
+    const nowMs = new Date(2026, 0, 1, 0, 0, 0, 0).getTime();
+
+    expect(parseQuotaResetLabelMs('04/05, 10:30', nowMs, 'en-US')).toBe(
+      new Date(2026, 3, 5, 10, 30, 0, 0).getTime()
+    );
+    expect(parseQuotaResetLabelMs('04/05, 10:30', nowMs, 'en-GB')).toBe(
+      new Date(2026, 4, 4, 10, 30, 0, 0).getTime()
+    );
+    expect(parseQuotaResetLabelMs('04.05., 10:30', nowMs, 'ru-RU')).toBe(
+      new Date(2026, 4, 4, 10, 30, 0, 0).getTime()
+    );
+  });
+
+  it('rejects numeric reset labels outside the JavaScript date range', () => {
+    expect(parseQuotaResetLabelMs(String(Number.MAX_VALUE))).toBeNull();
+  });
+
+  it('rejects an invalid normalized reset timestamp and falls back to a parseable label', () => {
+    const nowMs = new Date(2026, 11, 31, 23, 0, 0, 0).getTime();
+    const window = buildAccountQuotaDisplayWindow({
+      key: 'legacy',
+      label: 'Legacy window',
+      remainingPercent: 50,
+      usedPercent: 50,
+      resetLabel: '01/01 01:30',
+      resetAtMs: Number.MAX_VALUE,
+      resetAccuracy: 'exact',
+      nowMs,
+    });
+
+    expect(window.resetAtMs).toBe(new Date(2027, 0, 1, 1, 30, 0, 0).getTime());
+    expect(window.resetAccuracy).toBe('unknown');
+  });
+
+  it.each(['claude', 'antigravity', 'kimi', 'xai'] as const)(
+    'keeps observedAt compatibility for %s when progress provenance is absent',
+    (source) => {
+      const window = buildAccountQuotaDisplayWindow({
+        key: `${source}-window`,
+        label: 'Quota',
+        remainingPercent: 60,
+        usedPercent: 40,
+        resetLabel: '-',
+        source,
+        observedAtMs: 2_000,
+      });
+
+      expect(window.quotaProgressObservedAtMs).toBe(2_000);
+    }
+  );
+
+  it('keeps Codex explicit unknown progress provenance from falling back to observedAt', () => {
+    const window = buildAccountQuotaDisplayWindow({
+      key: 'five-hour',
+      label: '5H',
+      remainingPercent: 40,
+      usedPercent: 60,
+      resetLabel: '-',
+      source: 'codex',
+      observedAtMs: 2_000,
+      quotaProgressObservedAtMs: null,
+    });
+
+    expect(window.quotaProgressObservedAtMs).toBeNull();
+  });
+
+  it('falls back to observedAt for legacy Codex windows without explicit provenance', () => {
+    const window = buildAccountQuotaDisplayWindow({
+      key: 'five-hour',
+      label: '5H',
+      remainingPercent: 40,
+      usedPercent: 60,
+      resetLabel: '-',
+      source: 'codex',
+      observedAtMs: 2_000,
+    });
+
+    expect(window.quotaProgressObservedAtMs).toBe(2_000);
+  });
+
+  it('uses auth-index scoped Codex quota and preserves request window ranges', () => {
+    const resetAtMs = Date.parse('2026-07-09T14:00:00Z');
+    const quota: CodexQuotaState = {
+      status: 'success',
+      windows: [
+        {
+          id: 'primary',
+          label: 'Primary',
+          usedPercent: 75,
+          resetLabel: '2026-07-09T14:00:00Z',
+          resetAtMs,
+          resetAccuracy: 'exact',
+          limitWindowSeconds: 18_000,
+        },
+      ],
+    };
+    const row = buildRow({ name: 'shared.codex.json', type: 'codex', authIndex: '1' });
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores: emptyStores(),
+      getDisplayCodexQuota: () => quota,
+      translateQuotaWindowLabel,
+      t,
+      nowMs: Date.parse('2026-07-09T12:00:00Z'),
+    });
+
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({
+      key: 'primary',
+      kind: 'five_hour',
+      remainingPercent: 25,
+      usedPercent: 75,
+      resetAtMs,
+      resetAccuracy: 'exact',
+      limitWindowSeconds: 18_000,
+      source: 'codex',
+    });
+    expect(windows[0].fromMs).toBe(Date.parse('2026-07-09T09:00:00Z'));
+    expect(windows[0].toMs).toBe(Date.parse('2026-07-09T12:00:00Z'));
+    expect(getQuotaWindowShortLabel(windows[0])).toBe('5H');
+  });
+
+  it('maps Claude quota windows through translated labels', () => {
+    const stores = {
+      ...emptyStores(),
+      claudeQuota: {
+        'claude.json': {
+          status: 'success',
+          fetchedAtMs: 2_000,
+          windows: [
+            {
+              id: 'seven_day',
+              label: 'Weekly',
+              labelKey: 'kimi_quota.weekly_limit',
+              usedPercent: 40,
+              resetLabel: '07/10, 12:00',
+              resetAtMs: Date.parse('2026-07-10T12:00:00Z'),
+              resetAccuracy: 'exact',
+              limitWindowSeconds: 7 * 24 * 60 * 60,
+              modelScope: { kind: 'all', complete: true },
+            },
+          ],
+          extraUsage: {
+            is_enabled: true,
+            used_credits: 150,
+            monthly_limit: 500,
+            utilization: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'claude.json', type: 'claude' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(2);
+    expect(windows[0]).toMatchObject({
+      key: 'seven_day',
+      label: 'Weekly limit',
+      kind: 'weekly',
+      remainingPercent: 60,
+      resetAtMs: Date.parse('2026-07-10T12:00:00Z'),
+      resetAccuracy: 'exact',
+      limitWindowSeconds: 7 * 24 * 60 * 60,
+      modelScope: { kind: 'all', complete: true },
+      source: 'claude',
+    });
+    expect(windows[1]).toMatchObject({
+      key: 'extra-usage',
+      label: 'Extra Usage',
+      kind: 'billing',
+      remainingPercent: 70,
+      usedPercent: 30,
+      amountLabel: '$1.50 / $5.00',
+      source: 'claude',
+      observedAtMs: 2_000,
+      quotaProgressObservedAtMs: 2_000,
+    });
+    expect(getAccountQuotaSemanticGroup(windows[1])).toBe('other');
+  });
+
+  it('flattens Antigravity groups while retaining group and bucket metadata', () => {
+    const stores = {
+      ...emptyStores(),
+      antigravityQuota: {
+        'ag.json': {
+          status: 'success',
+          groups: [
+            {
+              id: 'gemini',
+              label: 'Gemini models',
+              models: ['gemini-3-pro'],
+              description: 'models within this group: gemini-3-pro',
+              buckets: [
+                {
+                  id: 'daily',
+                  label: 'Daily limit',
+                  window: 'daily',
+                  remainingFraction: 0.42,
+                  resetTime: '2026-07-10T00:00:00Z',
+                  description: 'Daily model quota',
+                },
+                {
+                  id: 'month-end-five-hour',
+                  label: '5 Hour Limit',
+                  window: '5h',
+                  remainingFraction: 0.52,
+                  resetTime: '2026-07-09T10:00:00Z',
+                },
+              ],
+            },
+            {
+              id: 'claude-gpt',
+              label: 'Claude and GPT models',
+              buckets: [
+                {
+                  id: 'weekly',
+                  label: 'Weekly limit',
+                  window: 'weekly',
+                  remainingFraction: 0.65,
+                  resetTime: '2026-07-15T00:00:00Z',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'ag.json', type: 'antigravity' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(3);
+    expect(windows[0]).toMatchObject({
+      key: 'gemini:daily',
+      label: 'Daily limit',
+      kind: 'daily',
+      remainingPercent: 42,
+      usedPercent: 58,
+      groupLabel: 'Gemini models',
+      description: 'Daily model quota',
+      resetAtMs: Date.parse('2026-07-10T00:00:00Z'),
+      resetAccuracy: 'exact',
+      limitWindowSeconds: 24 * 60 * 60,
+      modelScope: { kind: 'models', models: ['gemini-3-pro'], complete: true },
+      source: 'antigravity',
+    });
+    expect(getQuotaWindowShortLabel(windows[0])).toBe('24H');
+    expect(windows[1]).toMatchObject({
+      key: 'gemini:month-end-five-hour',
+      kind: 'five_hour',
+      remainingPercent: 52,
+      usedPercent: 48,
+      limitWindowSeconds: 5 * 60 * 60,
+      modelScope: { kind: 'models', models: ['gemini-3-pro'], complete: true },
+    });
+    expect(getQuotaWindowShortLabel(windows[1])).toBe('5H');
+    expect(windows[2]).toMatchObject({
+      key: 'claude-gpt:weekly',
+      kind: 'weekly',
+      limitWindowSeconds: 7 * 24 * 60 * 60,
+      modelScope: { kind: 'family', key: 'claude_gpt', complete: true },
+    });
+  });
+
+  it('carries non-Codex fetchedAt through the production forecast chain', () => {
+    const fetchedAtMs = Date.parse('2026-07-01T00:00:00Z');
+    const resetAtMs = fetchedAtMs + 5 * 60 * 60 * 1000;
+    const nowMs = fetchedAtMs + 60 * 60 * 1000;
+    const stores = {
+      ...emptyStores(),
+      antigravityQuota: {
+        'ag.json': {
+          status: 'success',
+          fetchedAtMs,
+          groups: [
+            {
+              id: 'gemini',
+              label: 'Gemini models',
+              models: ['gemini-3-pro'],
+              buckets: [
+                {
+                  id: 'five-hour',
+                  label: '5 Hour Limit',
+                  window: '5h',
+                  remainingFraction: 0.5,
+                  resetTime: new Date(resetAtMs).toISOString(),
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'ag.json', type: 'antigravity' }, stores);
+    const displayWindows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+      nowMs,
+    });
+    const [definition] = buildAccountQuotaWindowDefinitions(displayWindows, nowMs);
+    const currentUsage: MonitoringAccountWindowUsageItem = {
+      row_key: row.selectionKey,
+      window_key: definition.providerWindowId,
+      from_ms: definition.cycleStartMs ?? fetchedAtMs,
+      to_ms: nowMs,
+      matched: true,
+      total_requests: 100,
+      success_calls: 100,
+      failure_calls: 0,
+      total_tokens: 1_000_000,
+      total_cost: 5,
+      success_rate: 1,
+      last_seen_ms: fetchedAtMs - 100,
+      sync_status: 'ready',
+      scope_match_status: 'complete',
+    };
+    const detail = buildAccountDetailViewModel(row, {
+      quotaWindows: [{ ...definition, resetLabel: definition.display.resetLabel }],
+      windowUsageByKey: new Map([
+        [
+          accountWindowUsageRequestKey(
+            row.selectionKey,
+            definition.providerWindowId,
+            'current',
+            definition.modelScope
+          ),
+          currentUsage,
+        ],
+      ]),
+    });
+
+    expect(displayWindows[0]).toMatchObject({
+      usedPercent: 50,
+      observedAtMs: fetchedAtMs,
+      quotaProgressObservedAtMs: fetchedAtMs,
+    });
+    expect(definition).toMatchObject({
+      observedAtMs: fetchedAtMs,
+      quotaProgressObservedAtMs: fetchedAtMs,
+    });
+    expect(detail.quota.windows[0].forecast).toMatchObject({ basis: 'quota' });
+  });
+
+  it('adds Kimi usage amounts and formatted reset hints', () => {
+    const stores = {
+      ...emptyStores(),
+      kimiQuota: {
+        'kimi.json': {
+          status: 'success',
+          rows: [
+            {
+              id: 'weekly',
+              labelKey: 'kimi_quota.weekly_limit',
+              used: 3,
+              limit: 10,
+              resetHint: '2d',
+              resetAtMs: Date.parse('2026-07-31T10:00:00Z'),
+              resetAccuracy: 'estimated',
+              scope: 'FEATURE_CODING',
+              limitWindowSeconds: 7 * 24 * 60 * 60,
+            },
+          ],
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'kimi.json', type: 'kimi' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows[0]).toMatchObject({
+      key: 'weekly',
+      label: 'Weekly limit',
+      kind: 'weekly',
+      remainingPercent: 70,
+      usedPercent: 30,
+      resetLabel: 'resets in 2d',
+      resetAtMs: Date.parse('2026-07-31T10:00:00Z'),
+      resetAccuracy: 'estimated',
+      limitWindowSeconds: 7 * 24 * 60 * 60,
+      modelScope: { kind: 'all', complete: true },
+      amountLabel: '3 / 10',
+      source: 'kimi',
+    });
+  });
+
+  it('builds top-level Kimi weekly quota with 604800s duration as fixed weekly interval in standard semantic group', () => {
+    const stores = {
+      ...emptyStores(),
+      kimiQuota: {
+        'kimi.json': {
+          status: 'success',
+          rows: [
+            {
+              id: 'summary',
+              labelKey: 'kimi_quota.weekly_limit',
+              used: 17,
+              limit: 100,
+              resetAtMs: Date.parse('2026-09-13T00:24:47.694Z'),
+              resetAccuracy: 'exact',
+              limitWindowSeconds: 604_800,
+            },
+          ],
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'kimi.json', type: 'kimi' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({
+      key: 'summary',
+      kind: 'weekly',
+      windowMode: 'fixed',
+      limitWindowSeconds: 604_800,
+    });
+    expect(getAccountQuotaSemanticGroup(windows[0])).toBe('standard');
+    expect(isIntervalAccountQuotaWindow(windows[0])).toBe(true);
+    expect(isStandardAccountQuotaListWindow(windows[0])).toBe(true);
+  });
+
+  it('builds Devin daily and weekly display windows with exact reset and clamp percent', () => {
+    const dailyResetAtMs = Date.parse('2026-09-15T12:00:00Z');
+    const weeklyResetAtMs = Date.parse('2026-09-22T12:00:00Z');
+    const stores = {
+      ...emptyStores(),
+      devinQuota: {
+        'devin.json::d-1': {
+          status: 'success',
+          authFileKey: 'devin.json::d-1',
+          authFileName: 'devin.json',
+          authIndex: 'd-1',
+          authFileIdentityVerified: true,
+          windows: [
+            {
+              id: 'daily',
+              remainingPercent: 0,
+              resetAtMs: dailyResetAtMs,
+              periodHours: 24,
+            },
+            {
+              id: 'weekly',
+              remainingPercent: 75,
+              resetAtMs: weeklyResetAtMs,
+              periodHours: 168,
+            },
+          ],
+          plan: 'Pro',
+          planStartMs: null,
+          planEndMs: null,
+          observedAtMs: Date.parse('2026-09-15T10:00:00Z'),
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'devin.json', type: 'devin', authIndex: 'd-1' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(2);
+    expect(windows[0]).toMatchObject({
+      key: 'devin:daily',
+      label: 'Daily limit',
+      kind: 'daily',
+      remainingPercent: 0,
+      usedPercent: 100,
+      resetAtMs: dailyResetAtMs,
+      resetAccuracy: 'exact',
+      limitWindowSeconds: 24 * 3600,
+      source: 'devin',
+      modelScope: { kind: 'all', complete: true },
+      windowMode: 'fixed',
+      cycleStartMs: dailyResetAtMs - 24 * 3600 * 1000,
+      cycleEndMs: dailyResetAtMs,
+    });
+    expect(isIntervalAccountQuotaWindow(windows[0])).toBe(true);
+    expect(isStandardAccountQuotaListWindow(windows[0])).toBe(true);
+    expect(getAccountQuotaSemanticGroup(windows[0])).toBe('standard');
+
+    expect(windows[1]).toMatchObject({
+      key: 'devin:weekly',
+      label: 'Weekly limit',
+      kind: 'weekly',
+      remainingPercent: 75,
+      usedPercent: 25,
+      resetAtMs: weeklyResetAtMs,
+      resetAccuracy: 'exact',
+      limitWindowSeconds: 168 * 3600,
+      source: 'devin',
+      modelScope: { kind: 'all', complete: true },
+      windowMode: 'fixed',
+      cycleStartMs: weeklyResetAtMs - 168 * 3600 * 1000,
+      cycleEndMs: weeklyResetAtMs,
+    });
+    expect(isIntervalAccountQuotaWindow(windows[1])).toBe(true);
+    expect(isStandardAccountQuotaListWindow(windows[1])).toBe(true);
+    expect(getAccountQuotaSemanticGroup(windows[1])).toBe('standard');
+  });
+
+  it('keeps Devin windowMode unknown without cycle boundaries when resetAtMs is missing or invalid', () => {
+    const stores = {
+      ...emptyStores(),
+      devinQuota: {
+        'devin.json::d-1': {
+          status: 'success',
+          authFileKey: 'devin.json::d-1',
+          authFileName: 'devin.json',
+          authIndex: 'd-1',
+          authFileIdentityVerified: true,
+          windows: [
+            {
+              id: 'daily',
+              remainingPercent: 50,
+              resetAtMs: null,
+              periodHours: 24,
+            },
+          ],
+          plan: 'Pro',
+          planStartMs: null,
+          planEndMs: null,
+          observedAtMs: Date.parse('2026-09-15T10:00:00Z'),
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'devin.json', type: 'devin', authIndex: 'd-1' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({
+      key: 'devin:daily',
+      kind: 'daily',
+      windowMode: 'unknown',
+      cycleStartMs: null,
+      cycleEndMs: null,
+    });
+    expect(isIntervalAccountQuotaWindow(windows[0])).toBe(false);
+    expect(isStandardAccountQuotaListWindow(windows[0])).toBe(false);
+  });
+
+  it('preserves Devin daily and weekly windows on transient refresh error when previous windows exist', () => {
+    const stores = {
+      ...emptyStores(),
+      devinQuota: {
+        'devin.json::d-1': {
+          status: 'error',
+          error: 'temporary failure',
+          errorStatus: 502,
+          failedAtMs: Date.parse('2026-09-15T10:05:00Z'),
+          authFileKey: 'devin.json::d-1',
+          authFileName: 'devin.json',
+          authIndex: 'd-1',
+          authFileIdentityVerified: true,
+          plan: 'Pro',
+          planStartMs: Date.parse('2026-09-01T00:00:00Z'),
+          planEndMs: Date.parse('2026-10-01T00:00:00Z'),
+          windows: [
+            {
+              id: 'daily',
+              remainingPercent: 50,
+              resetAtMs: Date.parse('2026-09-15T12:00:00Z'),
+              periodHours: 24,
+            },
+            {
+              id: 'weekly',
+              remainingPercent: 80,
+              resetAtMs: Date.parse('2026-09-22T12:00:00Z'),
+              periodHours: 168,
+            },
+          ],
+          observedAtMs: Date.parse('2026-09-15T10:00:00Z'),
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'devin.json', type: 'devin', authIndex: 'd-1' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(2);
+    expect(windows[0]).toMatchObject({
+      key: 'devin:daily',
+      label: 'Daily limit',
+      remainingPercent: 50,
+    });
+    expect(windows[1]).toMatchObject({
+      key: 'devin:weekly',
+      label: 'Weekly limit',
+      remainingPercent: 80,
+    });
+  });
+
+  it('splits xAI billing into monthly and pay-as-you-go windows', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'monthly',
+            usagePercent: null,
+            productUsage: [],
+            monthlyLimitCents: 10_000,
+            usedCents: 12_500,
+            includedUsedCents: 10_000,
+            onDemandCapCents: 5_000,
+            onDemandUsedCents: 2_500,
+            onDemandUsedPercent: 50,
+            billingPeriodEnd: '2026-07-31T00:00:00Z',
+            usedPercent: 100,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: 'SuperGrok' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(2);
+    expect(windows[0]).toMatchObject({
+      key: 'billing',
+      label: 'Monthly credits',
+      kind: 'billing',
+      remainingPercent: 0,
+      amountLabel: '$0.00 / $100.00 remaining',
+      source: 'xai',
+    });
+    expect(windows[1]).toMatchObject({
+      key: 'pay-as-you-go',
+      label: 'Pay-as-you-go',
+      kind: 'payg',
+      remainingPercent: 50,
+      amountLabel: '$25.00 / $50.00 remaining',
+      source: 'xai',
+    });
+    expect(getQuotaWindowShortLabel(windows[1])).toBe('PAYG');
+  });
+
+  it('keeps a monthly xAI billing period as an interval while hiding it from the list', () => {
+    const periodStartMs = Date.parse('2026-08-01T00:00:00Z');
+    const periodEndMs = Date.parse('2026-09-01T00:00:00Z');
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'monthly',
+            usagePercent: 20,
+            periodStart: '2026-08-01T00:00:00Z',
+            periodEnd: '2026-09-01T00:00:00Z',
+            productUsage: [{ product: 'Grok Code Fast', usagePercent: 20 }],
+            monthlyLimitCents: 10_000,
+            usedCents: 2_000,
+            includedUsedCents: 2_000,
+            onDemandCapCents: null,
+            onDemandUsedCents: null,
+            onDemandUsedPercent: null,
+            billingPeriodStart: '2026-08-01T00:00:00Z',
+            billingPeriodEnd: '2026-09-01T00:00:00Z',
+            usedPercent: 20,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: 'SuperGrok' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+      nowMs: Date.parse('2026-08-15T00:00:00Z'),
+    });
+    const periodWindow = windows.find((window) => window.key === 'credits-period');
+
+    expect(periodWindow).toMatchObject({
+      kind: 'billing',
+      windowMode: 'fixed',
+      cycleStartMs: periodStartMs,
+      cycleEndMs: periodEndMs,
+      modelScope: { kind: 'all', complete: true },
+    });
+    expect(periodWindow).toBeDefined();
+    expect(isIntervalAccountQuotaWindow(periodWindow!)).toBe(true);
+    expect(isModelScopedAccountQuotaWindow(periodWindow!)).toBe(false);
+    expect(isStandardAccountQuotaListWindow(periodWindow!)).toBe(false);
+  });
+
+  it('shows xAI weekly credits as a separate quota window', () => {
+    const billingPeriodEndMs = Date.parse('2026-07-08T00:00:00Z');
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: 42,
+            periodStart: '2026-07-01T00:00:00Z',
+            periodEnd: '2026-07-08T00:00:00Z',
+            billingPeriodEnd: String(billingPeriodEndMs / 1000),
+            productUsage: [{ product: 'Grok Code Fast', usagePercent: 37 }],
+            monthlyLimitCents: 10_000,
+            usedCents: 4_000,
+            includedUsedCents: 4_000,
+            onDemandCapCents: null,
+            onDemandUsedCents: null,
+            onDemandUsedPercent: null,
+            usedPercent: 40,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: 'SuperGrok' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(3);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      label: 'Weekly credits',
+      kind: 'weekly',
+      remainingPercent: 58,
+      usedPercent: 42,
+      resetAtMs: billingPeriodEndMs,
+      resetAccuracy: 'exact',
+      limitWindowSeconds: 7 * 24 * 60 * 60,
+      cycleStartMs: Date.parse('2026-07-01T00:00:00Z'),
+      cycleEndMs: billingPeriodEndMs,
+      windowMode: 'fixed',
+      source: 'xai',
+    });
+    expect(windows[1]).toMatchObject({
+      key: 'billing',
+      label: 'Monthly credits',
+      remainingPercent: 60,
+      resetAtMs: billingPeriodEndMs,
+      resetAccuracy: 'exact',
+      source: 'xai',
+    });
+    expect(windows[2]).toMatchObject({
+      key: 'product-0-grok-code-fast',
+      label: 'Grok Code Fast',
+      kind: 'product',
+      remainingPercent: 63,
+      usedPercent: 37,
+      resetAtMs: billingPeriodEndMs,
+      resetAccuracy: 'exact',
+      source: 'xai',
+    });
+  });
+
+  it('does not create a monthly window from an on-demand billing reset alone', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: 0,
+            periodStart: '2026-08-13T00:00:00Z',
+            periodEnd: '2026-08-20T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: null,
+            usedCents: null,
+            includedUsedCents: null,
+            onDemandCapCents: 5_000,
+            onDemandUsedCents: 0,
+            onDemandUsedPercent: 0,
+            billingPeriodEnd: '2026-09-01T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: 'SuperGrok' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows.map((window) => window.key)).toEqual(['credits-period', 'pay-as-you-go']);
+  });
+
+  it('does not create quota windows for unknown plan even when positive limits exist', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'monthly',
+            usagePercent: null,
+            productUsage: [],
+            monthlyLimitCents: 10_000,
+            usedCents: 2_000,
+            includedUsedCents: 2_000,
+            onDemandCapCents: 5_000,
+            onDemandUsedCents: 2_500,
+            onDemandUsedPercent: 50,
+            billingPeriodEnd: '2026-07-31T00:00:00Z',
+            usedPercent: 100,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai' }, stores);
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  it('does not create a monthly window from weekly protobuf zero placeholders', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: 0,
+            periodStart: '2026-08-13T00:00:00Z',
+            periodEnd: '2026-08-20T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: null,
+            usedCents: 0,
+            includedUsedCents: 0,
+            onDemandCapCents: 0,
+            onDemandUsedCents: 0,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-09-01T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai' }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows.map((window) => window.key)).toEqual(['credits-period']);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      kind: 'weekly',
+      remainingPercent: 100,
+      usedPercent: 0,
+    });
+  });
+
+  it('creates weekly and product quota windows for unknown plan with valid weekly observation (issue #744)', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: 2.0,
+            periodStart: '2026-09-11T13:42:16.586061+00:00',
+            periodEnd: '2026-09-18T13:42:16.586061+00:00',
+            productUsage: [{ product: 'GrokBuild', usagePercent: 2.0 }],
+            monthlyLimitCents: 0,
+            usedCents: 0,
+            includedUsedCents: 0,
+            onDemandCapCents: 0,
+            onDemandUsedCents: 0,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-10-01T00:00:00Z',
+            usedPercent: 0,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: null }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows.map((w) => w.key)).toEqual(['credits-period', 'product-0-grokbuild']);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      kind: 'weekly',
+      remainingPercent: 98,
+      usedPercent: 2,
+    });
+    expect(windows[1]).toMatchObject({
+      key: 'product-0-grokbuild',
+      kind: 'product',
+      label: 'GrokBuild',
+      remainingPercent: 98,
+      usedPercent: 2,
+    });
+    expect(windows.some((w) => w.key === 'billing')).toBe(false);
+    expect(windows.some((w) => w.key === 'pay-as-you-go')).toBe(false);
+  });
+
+  it('creates weekly quota window with 0% remaining when unknown plan weekly usage is 100%', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: 100,
+            periodStart: '2026-09-11T13:42:16.586061+00:00',
+            periodEnd: '2026-09-18T13:42:16.586061+00:00',
+            productUsage: [],
+            monthlyLimitCents: 0,
+            usedCents: 0,
+            includedUsedCents: 0,
+            onDemandCapCents: 0,
+            onDemandUsedCents: 0,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-10-01T00:00:00Z',
+            usedPercent: 0,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: null }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows.map((w) => w.key)).toEqual(['credits-period']);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      kind: 'weekly',
+      remainingPercent: 0,
+      usedPercent: 100,
+    });
+  });
+
+  it('does not create quota windows for unknown plan when only PAYG limits exist', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: null,
+            productUsage: [],
+            monthlyLimitCents: 0,
+            usedCents: 0,
+            includedUsedCents: 0,
+            onDemandCapCents: 5_000,
+            onDemandUsedCents: 2_500,
+            onDemandUsedPercent: 50,
+            billingPeriodEnd: '2026-07-31T00:00:00Z',
+            usedPercent: 0,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: null }, stores);
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  it('creates weekly quota window for unknown plan with provider-observed weekly period metadata even when usagePercent is null', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: null,
+            periodStart: '2026-09-05T00:00:00Z',
+            periodEnd: '2026-09-12T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: 0,
+            usedCents: 0,
+            includedUsedCents: 0,
+            onDemandCapCents: 0,
+            onDemandUsedCents: 0,
+            onDemandUsedPercent: null,
+            billingPeriodStart: '2026-09-01T00:00:00Z',
+            billingPeriodEnd: '2026-10-01T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: null }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows.map((w) => w.key)).toEqual(['credits-period']);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      label: 'Weekly credits',
+      kind: 'weekly',
+      remainingPercent: null,
+      usedPercent: null,
+      resetAtMs: Date.parse('2026-09-12T00:00:00Z'),
+      cycleStartMs: Date.parse('2026-09-05T00:00:00Z'),
+      cycleEndMs: Date.parse('2026-09-12T00:00:00Z'),
+      windowMode: 'fixed',
+      limitWindowSeconds: 7 * 24 * 60 * 60,
+      source: 'xai',
+    });
+    expect(windows.some((w) => w.key === 'billing')).toBe(false);
+    expect(windows.some((w) => w.key === 'pay-as-you-go')).toBe(false);
+  });
+
+  it('creates weekly quota window for unknown plan with only periodEnd metadata and unknown usage', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: null,
+            periodEnd: '2026-09-12T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: 0,
+            usedCents: 0,
+            includedUsedCents: 0,
+            onDemandCapCents: 0,
+            onDemandUsedCents: 0,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-09-12T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: null }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows.map((w) => w.key)).toEqual(['credits-period']);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      kind: 'weekly',
+      remainingPercent: null,
+      usedPercent: null,
+      resetAtMs: Date.parse('2026-09-12T00:00:00Z'),
+      cycleStartMs: null,
+      cycleEndMs: Date.parse('2026-09-12T00:00:00Z'),
+      limitWindowSeconds: null,
+      windowMode: 'unknown',
+      source: 'xai',
+    });
+  });
+
+  it('creates weekly quota window for unknown plan with only periodStart metadata and does not fallback to billingPeriodEnd', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: null,
+            periodStart: '2026-09-05T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: 0,
+            usedCents: 0,
+            includedUsedCents: 0,
+            onDemandCapCents: 0,
+            onDemandUsedCents: 0,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-10-01T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: null }, stores);
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows.map((w) => w.key)).toEqual(['credits-period']);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      kind: 'weekly',
+      usedPercent: null,
+      remainingPercent: null,
+      cycleStartMs: Date.parse('2026-09-05T00:00:00Z'),
+      cycleEndMs: null,
+      resetAtMs: null,
+      limitWindowSeconds: null,
+      windowMode: 'unknown',
+      source: 'xai',
+    });
+    expect(windows[0].resetAtMs).not.toBe(Date.parse('2026-10-01T00:00:00Z'));
+    expect(windows[0].resetLabel).toBe('-');
+  });
+
+  it('does not create quota windows for unknown plan with only unconfirmed financial monthly/PAYG data', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'monthly',
+            usagePercent: null,
+            productUsage: [],
+            monthlyLimitCents: 10_000,
+            usedCents: 2_000,
+            includedUsedCents: 2_000,
+            onDemandCapCents: 5_000,
+            onDemandUsedCents: 2_500,
+            onDemandUsedPercent: 50,
+            billingPeriodEnd: '2026-10-01T00:00:00Z',
+            usedPercent: 20,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai', planType: null }, stores);
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  it('does not create xAI quota windows for explicit Free plan with metadata-only weekly period', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai-free-meta.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: null,
+            periodStart: '2026-09-05T00:00:00Z',
+            periodEnd: '2026-09-12T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: 0,
+            usedCents: null,
+            includedUsedCents: null,
+            onDemandCapCents: null,
+            onDemandUsedCents: null,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-09-12T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow(
+      { name: 'xai-free-meta.json', type: 'xai', planType: 'free' },
+      stores
+    );
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  it('creates weekly quota window and ignores zero monthly limit for confirmed paid plan SuperGrok', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai-supergrok-zero.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: null,
+            periodStart: '2026-09-05T00:00:00Z',
+            periodEnd: '2026-09-12T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: 0,
+            usedCents: 0,
+            includedUsedCents: 0,
+            onDemandCapCents: 0,
+            onDemandUsedCents: 0,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-10-01T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow(
+      { name: 'xai-supergrok-zero.json', type: 'xai', planType: 'SuperGrok' },
+      stores
+    );
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows.map((w) => w.key)).toEqual(['credits-period']);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      label: 'Weekly credits',
+      kind: 'weekly',
+      remainingPercent: null,
+      usedPercent: null,
+      cycleStartMs: Date.parse('2026-09-05T00:00:00Z'),
+      cycleEndMs: Date.parse('2026-09-12T00:00:00Z'),
+      windowMode: 'fixed',
+      limitWindowSeconds: 7 * 24 * 60 * 60,
+      source: 'xai',
+    });
+    expect(windows.some((w) => w.key === 'billing')).toBe(false);
+  });
+
+  it('does not create xAI quota windows for an explicit Free plan', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai-free.json': {
+          status: 'success',
+          billing: {
+            periodType: 'monthly',
+            usagePercent: 20,
+            productUsage: [],
+            monthlyLimitCents: 10_000,
+            usedCents: 2_000,
+            includedUsedCents: 2_000,
+            onDemandCapCents: null,
+            onDemandUsedCents: null,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-09-01T00:00:00Z',
+            usedPercent: 20,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai-free.json', type: 'xai', planType: 'free' }, stores);
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  it('does not create xAI quota windows for an explicit Free plan with weekly current-period data', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai-free-weekly.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: 42,
+            periodStart: '2026-09-05T00:00:00Z',
+            periodEnd: '2026-09-12T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: null,
+            usedCents: null,
+            includedUsedCents: null,
+            onDemandCapCents: null,
+            onDemandUsedCents: null,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-09-12T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow(
+      { name: 'xai-free-weekly.json', type: 'xai', planType: 'Free Tier' },
+      stores
+    );
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  it('does not create xAI quota windows for an explicit Free plan with positive on-demand cap', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai-free-payg.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: 0,
+            productUsage: [],
+            monthlyLimitCents: null,
+            usedCents: null,
+            includedUsedCents: null,
+            onDemandCapCents: 5_000,
+            onDemandUsedCents: 1_000,
+            onDemandUsedPercent: 20,
+            billingPeriodEnd: '2026-10-01T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai-free-payg.json', type: 'xai', planType: 'free' }, stores);
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  it('creates weekly quota window for confirmed paid plan SuperGrok without legacy monthly limit', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai-supergrok.json': {
+          status: 'success',
+          billing: {
+            periodType: 'weekly',
+            usagePercent: 42,
+            periodStart: '2026-09-05T00:00:00Z',
+            periodEnd: '2026-09-12T00:00:00Z',
+            productUsage: [],
+            monthlyLimitCents: null,
+            usedCents: null,
+            includedUsedCents: null,
+            onDemandCapCents: null,
+            onDemandUsedCents: null,
+            onDemandUsedPercent: null,
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow(
+      { name: 'xai-supergrok.json', type: 'xai', planType: 'SuperGrok' },
+      stores
+    );
+
+    const windows = buildAccountQuotaDisplayWindows(row, {
+      stores,
+      translateQuotaWindowLabel,
+      t,
+    });
+
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({
+      key: 'credits-period',
+      label: 'Weekly credits',
+      kind: 'weekly',
+      remainingPercent: 58,
+      usedPercent: 42,
+      cycleStartMs: Date.parse('2026-09-05T00:00:00Z'),
+      cycleEndMs: Date.parse('2026-09-12T00:00:00Z'),
+      source: 'xai',
+    });
+  });
+
+  it('does not create a monthly window when usage exists without limit evidence', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'monthly',
+            usagePercent: null,
+            productUsage: [],
+            monthlyLimitCents: null,
+            usedCents: 500,
+            includedUsedCents: 500,
+            onDemandCapCents: null,
+            onDemandUsedCents: null,
+            onDemandUsedPercent: null,
+            billingPeriodEnd: '2026-09-01T00:00:00Z',
+            usedPercent: null,
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'xai.json', type: 'xai' }, stores);
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  it('does not render billing windows for official API identity health', () => {
+    const stores = {
+      ...emptyStores(),
+      xaiQuota: {
+        'paid-xai.json': {
+          status: 'success',
+          billing: {
+            periodType: 'unknown',
+            usagePercent: null,
+            productUsage: [],
+            monthlyLimitCents: null,
+            usedCents: null,
+            includedUsedCents: null,
+            onDemandCapCents: null,
+            onDemandUsedCents: null,
+            onDemandUsedPercent: null,
+            usedPercent: null,
+            officialApiHealth: {
+              source: 'api.x.ai/v1/me',
+              userId: 'user-1',
+              teamId: 'team-1',
+              teamBlocked: false,
+            },
+          },
+        },
+      },
+    } satisfies AccountQuotaStores;
+    const row = buildRow({ name: 'paid-xai.json', type: 'xai' }, stores);
+
+    expect(
+      buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      })
+    ).toEqual([]);
+  });
+
+  describe('Meta quota display windows', () => {
+    it('builds display windows with fixed window duration and weekly duration null', () => {
+      const stores = emptyStores();
+      const file: AuthFileItem = { name: 'meta.json', type: 'meta', authIndex: 'm-1' };
+      const storeKey = 'meta.json::m-1';
+      const cycleStartMs = 1726396400000;
+      const cycleEndMs = 1726400000000;
+      const weeklyEndMs = 1726900000000;
+      const observedAtMs = 1726398000000;
+
+      stores.metaQuota[storeKey] = {
+        status: 'success',
+        authFileKey: storeKey,
+        authFileName: 'meta.json',
+        authIndex: 'm-1',
+        authFileIdentityVerified: true,
+        windows: [
+          {
+            id: 'window',
+            usedPercent: 15,
+            resetAtMs: cycleEndMs,
+            resetAccuracy: 'exact',
+            limitWindowSeconds: 3600,
+            quotaProgressObservedAtMs: observedAtMs,
+          },
+          {
+            id: 'weekly',
+            usedPercent: 60,
+            resetAtMs: weeklyEndMs,
+            resetAccuracy: 'exact',
+            limitWindowSeconds: null,
+            quotaProgressObservedAtMs: observedAtMs,
+          },
+        ],
+        plan: 'Meta Pro',
+        isSubscriptionActive: true,
+        quotaInventoryObserved: true,
+        observedAtMs,
+        fetchedAtMs: observedAtMs,
+      };
+
+      const row = buildRow(file, stores);
+      const windows = buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      });
+
+      expect(windows).toHaveLength(2);
+
+      // window
+      expect(windows[0]).toMatchObject({
+        key: 'meta:window',
+        source: 'meta',
+        windowMode: 'fixed',
+        remainingPercent: 85,
+        usedPercent: 15,
+        limitWindowSeconds: 3600,
+        resetAccuracy: 'exact',
+        resetAtMs: cycleEndMs,
+        fromMs: cycleStartMs,
+        toMs: cycleEndMs,
+        observedAtMs,
+        quotaProgressObservedAtMs: observedAtMs,
+      });
+
+      // weekly: limitWindowSeconds MUST be null, fromMs/toMs null because duration is unknown
+      expect(windows[1]).toMatchObject({
+        key: 'meta:weekly',
+        source: 'meta',
+        windowMode: 'unknown',
+        remainingPercent: 40,
+        usedPercent: 60,
+        limitWindowSeconds: null,
+        resetAccuracy: 'exact',
+        resetAtMs: weeklyEndMs,
+        fromMs: null,
+        toMs: null,
+        observedAtMs,
+        quotaProgressObservedAtMs: observedAtMs,
+      });
+      expect(isIntervalAccountQuotaWindow(windows[1])).toBe(false);
+      expect(isStandardAccountQuotaListWindow(windows[1])).toBe(false);
+      expect(isIntervalAccountQuotaWindow(windows[0])).toBe(true);
+    });
+
+    it('handles Meta quota with unknown remaining values', () => {
+      const stores = emptyStores();
+      const file: AuthFileItem = { name: 'meta-unknown.json', type: 'meta', authIndex: 'm-unknown' };
+      const storeKey = 'meta-unknown.json::m-unknown';
+
+      stores.metaQuota[storeKey] = {
+        status: 'idle',
+        authFileKey: storeKey,
+        authFileName: 'meta-unknown.json',
+        authIndex: 'm-unknown',
+        authFileIdentityVerified: true,
+        windows: [
+          {
+            id: 'window',
+            usedPercent: null,
+            resetAtMs: null,
+            resetAccuracy: 'unknown',
+            limitWindowSeconds: null,
+            quotaProgressObservedAtMs: null,
+          },
+        ],
+        plan: null,
+        isSubscriptionActive: null,
+        quotaInventoryObserved: false,
+        observedAtMs: 1000,
+        fetchedAtMs: 1000,
+      };
+
+      const row = buildRow(file, stores);
+      const windows = buildAccountQuotaDisplayWindows(row, {
+        stores,
+        translateQuotaWindowLabel,
+        t,
+      });
+
+      expect(windows).toHaveLength(1);
+      expect(windows[0]).toMatchObject({
+        key: 'meta:window',
+        source: 'meta',
+        remainingPercent: null,
+        usedPercent: null,
+        resetLabel: '-',
+        resetAtMs: null,
+        quotaProgressObservedAtMs: null,
+      });
+    });
+  });
+});

@@ -1,0 +1,91 @@
+name: Deployment / Configuration Help
+description: Docker, Manager Server, networking, reverse proxy, and Windows deployment questions
+title: "[Deploy]: "
+labels: ["deployment", "needs-triage"]
+
+body:
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Runtime Environment
+      options:
+        - Linux Docker
+        - Windows Docker
+        - Native Windows
+        - macOS
+        - Hugging Face / Render / ClawCloud / other hosting platform
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deploy-mode
+    attributes:
+      label: Deployment Mode
+      options:
+        - CPA panel repository URL only
+        - Full Docker setup
+        - CPA control panel + external Manager Server
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: docker-compose
+    attributes:
+      label: Docker Compose / Startup Command
+      description: Paste the sanitized command or configuration.
+      render: yaml
+    validations:
+      required: false
+
+  - type: input
+    id: cpa-url
+    attributes:
+      label: CPA URL
+      placeholder: http://127.0.0.1:xxxx
+    validations:
+      required: true
+
+  - type: input
+    id: manager-url
+    attributes:
+      label: Manager Server URL
+      placeholder: http://127.0.0.1:18317
+    validations:
+      required: false
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error Message
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: connectivity
+    attributes:
+      label: Connectivity Check Results
+      description: Paste connectivity checks you have run. Browser access does not always mean containers can reach each other.
+      render: shell
+      placeholder: |
+        curl <CPA URL>/status
+        curl <Manager Server URL>/status
+        docker network ls
+        docker compose ps
+        Reverse proxy path / base path:
+    validations:
+      required: false
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: Troubleshooting Already Tried
+      placeholder: |
+        For example:
+        - Confirmed that the containers are in the same network
+        - Confirmed port mappings
+        - Ran curl /status
+    validations:
+      required: false

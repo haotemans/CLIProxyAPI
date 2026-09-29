@@ -1,0 +1,685 @@
+package auth
+
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"cpa-usage-keeper/internal/entities"
+	"cpa-usage-keeper/internal/timeutil"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+type SessionStore interface {
+	Save(string, Session) error
+	Get(string) (Session, bool, error)
+	List(time.Time) ([]SessionRecord, error)
+	UpdateActivity(string, string, time.Time) error
+	UpdateAdminAliasByTokenHash(string, string, time.Time) (int64, error)
+	Delete(string) error
+	DeleteByTokenHash(string) (int64, error)
+	DeleteByRole(Role) (int64, error)
+	DeleteExpired(time.Time) error
+}
+
+type GormSessionStore struct {
+	db *gorm.DB
+}
+
+func NewGormSessionStore(db *gorm.DB) *GormSessionStore {
+	return &GormSessionStore{db: db}
+}
+
+func (s *GormSessionStore) Save(token string, session Session) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("auth session store is not configured")
+	}
+	row := entities.AuthSession{
+		TokenHash:   sessionTokenHash(token),
+		Role:        string(session.Role),
+		Source:      string(NormalizeSessionSource(session.Source)),
+		Alias:       session.Alias,
+		CPAAPIKeyID: session.CPAAPIKeyID,
+		LoginIP:     session.LoginIP,
+		LastSeenIP:  session.LastSeenIP,
+		UserAgent:   session.UserAgent,
+		LastSeenAt:  sessionTimePointer(session.LastSeenAt),
+		ExpiresAt:   session.ExpiresAt,
+		CreatedAt:   session.CreatedAt,
+		UpdatedAt:   session.CreatedAt,
+	}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "token_hash"}},
+		UpdateAll: true,
+	}).Create(&row).Error
+}
+
+func (s *GormSessionStore) UpdateAdminAliasByTokenHash(tokenHash, alias string, updatedAt time.Time) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("auth session store is not configured")
+	}
+	result := s.db.Model(&entities.AuthSession{}).
+		Where("token_hash = ? AND role = ?", tokenHash, string(RoleAdmin)).
+		Updates(map[string]any{
+			"alias":      alias,
+			"updated_at": timeutil.FormatStorageTime(updatedAt),
+		})
+	return result.RowsAffected, result.Error
+}
+
+func (s *GormSessionStore) UpdateActivity(token, lastSeenIP string, lastSeenAt time.Time) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("auth session store is not configured")
+	}
+	updates := map[string]any{
+		"last_seen_ip": lastSeenIP,
+		"last_seen_at": timeutil.FormatStorageTime(lastSeenAt),
+		"updated_at":   timeutil.FormatStorageTime(lastSeenAt),
+	}
+	return s.db.Model(&entities.AuthSession{}).
+		Where("token_hash = ?", sessionTokenHash(token)).
+		Updates(updates).Error
+}
+
+func (s *GormSessionStore) Get(token string) (Session, bool, error) {
+	if s == nil || s.db == nil {
+		return Session{}, false, fmt.Errorf("auth session store is not configured")
+	}
+	var row entities.AuthSession
+	if err := s.db.Where("token_hash = ?", sessionTokenHash(token)).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Session{}, false, nil
+		}
+		return Session{}, false, err
+	}
+	session, err := authSessionFromRow(row)
+	if err != nil {
+		return Session{}, false, err
+	}
+	return session, true, nil
+}
+
+func (s *GormSessionStore) List(now time.Time) ([]SessionRecord, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("auth session store is not configured")
+	}
+	var rows []entities.AuthSession
+	if err := s.db.Where("expires_at > ?", timeutil.FormatStorageTime(now)).Order("created_at asc, token_hash asc").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	records := make([]SessionRecord, 0, len(rows))
+	for _, row := range rows {
+		record, err := authSessionRecordFromRow(row)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
+func (s *GormSessionStore) Delete(token string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("auth session store is not configured")
+	}
+	return s.db.Unscoped().Where("token_hash = ?", sessionTokenHash(token)).Delete(&entities.AuthSession{}).Error
+}
+
+func (s *GormSessionStore) DeleteByTokenHash(tokenHash string) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("auth session store is not configured")
+	}
+	result := s.db.Unscoped().Where("token_hash = ?", tokenHash).Delete(&entities.AuthSession{})
+	return result.RowsAffected, result.Error
+}
+
+func (s *GormSessionStore) DeleteByRole(role Role) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("auth session store is not configured")
+	}
+	result := s.db.Unscoped().Where("role = ?", string(role)).Delete(&entities.AuthSession{})
+	return result.RowsAffected, result.Error
+}
+
+func (s *GormSessionStore) DeleteExpired(now time.Time) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("auth session store is not configured")
+	}
+	return s.db.Unscoped().Where("expires_at <= ?", timeutil.FormatStorageTime(now)).Delete(&entities.AuthSession{}).Error
+}
+
+func authSessionFromRow(row entities.AuthSession) (Session, error) {
+	source := NormalizeSessionSource(SessionSource(row.Source))
+	lastSeenAt := row.CreatedAt
+	if row.LastSeenAt != nil && !row.LastSeenAt.IsZero() {
+		lastSeenAt = *row.LastSeenAt
+	}
+	switch Role(row.Role) {
+	case RoleAdmin:
+		return Session{
+			Role: RoleAdmin, Source: source, Alias: row.Alias, LoginIP: row.LoginIP, LastSeenIP: row.LastSeenIP,
+			UserAgent: row.UserAgent, LastSeenAt: lastSeenAt, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt,
+		}, nil
+	case RoleAPIKeyViewer:
+		return Session{
+			Role: RoleAPIKeyViewer, Source: source, CPAAPIKeyID: row.CPAAPIKeyID,
+			LoginIP: row.LoginIP, LastSeenIP: row.LastSeenIP, UserAgent: row.UserAgent,
+			LastSeenAt: lastSeenAt, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt,
+		}, nil
+	default:
+		return Session{}, fmt.Errorf("unknown auth session role %q", row.Role)
+	}
+}
+
+func authSessionRecordFromRow(row entities.AuthSession) (SessionRecord, error) {
+	session, err := authSessionFromRow(row)
+	if err != nil {
+		return SessionRecord{}, err
+	}
+	return SessionRecord{
+		TokenHash:   row.TokenHash,
+		Role:        session.Role,
+		Source:      session.Source,
+		Alias:       session.Alias,
+		CPAAPIKeyID: session.CPAAPIKeyID,
+		LoginIP:     session.LoginIP,
+		LastSeenIP:  session.LastSeenIP,
+		UserAgent:   session.UserAgent,
+		LastSeenAt:  session.LastSeenAt,
+		ExpiresAt:   session.ExpiresAt,
+		CreatedAt:   session.CreatedAt,
+	}, nil
+}
+
+func sessionTokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func SessionTokenHash(token string) string {
+	return sessionTokenHash(token)
+}
+
+type Role string
+
+const (
+	RoleAdmin        Role = "admin"
+	RoleAPIKeyViewer Role = "api_key_viewer"
+)
+
+type SessionSource string
+
+const (
+	SessionSourceStandard SessionSource = "standard"
+	SessionSourceEmbed    SessionSource = "embed"
+)
+
+func NormalizeSessionSource(source SessionSource) SessionSource {
+	if source == SessionSourceEmbed {
+		return SessionSourceEmbed
+	}
+	return SessionSourceStandard
+}
+
+type Session struct {
+	Role        Role
+	Source      SessionSource
+	Alias       string
+	CPAAPIKeyID int64
+	LoginIP     string
+	LastSeenIP  string
+	UserAgent   string
+	LastSeenAt  time.Time
+	ExpiresAt   time.Time
+	CreatedAt   time.Time
+}
+
+type SessionRecord struct {
+	TokenHash   string
+	Role        Role
+	Source      SessionSource
+	Alias       string
+	CPAAPIKeyID int64
+	LoginIP     string
+	LastSeenIP  string
+	UserAgent   string
+	LastSeenAt  time.Time
+	ExpiresAt   time.Time
+	CreatedAt   time.Time
+}
+
+type SessionClientMetadata struct {
+	IP        string
+	UserAgent string
+}
+
+type RevokeResult struct {
+	Deleted int
+}
+
+type sessionActivityUpdate struct {
+	token      string
+	lastSeenIP string
+	lastSeenAt time.Time
+}
+
+type SessionManager struct {
+	ttl      time.Duration
+	now      func() time.Time
+	generate func() (string, error)
+	store    SessionStore
+
+	mu                    sync.RWMutex
+	sessions              map[string]Session
+	pendingActivity       map[string]sessionActivityUpdate
+	activityWriterRunning bool
+}
+
+const sessionActivityWriteInterval = time.Minute
+
+func NewSessionManager(ttl time.Duration) *SessionManager {
+	return &SessionManager{
+		ttl:             ttl,
+		now:             time.Now,
+		generate:        generateToken,
+		sessions:        make(map[string]Session),
+		pendingActivity: make(map[string]sessionActivityUpdate),
+	}
+}
+
+func NewPersistentSessionManager(ttl time.Duration, store SessionStore) *SessionManager {
+	manager := NewSessionManager(ttl)
+	manager.store = store
+	return manager
+}
+
+func (m *SessionManager) Create() (string, time.Time, error) {
+	return m.CreateWithSource(SessionSourceStandard)
+}
+
+func (m *SessionManager) CreateWithSource(source SessionSource) (string, time.Time, error) {
+	return m.CreateWithSourceAndMetadata(source, SessionClientMetadata{})
+}
+
+func (m *SessionManager) CreateWithSourceAndMetadata(source SessionSource, metadata SessionClientMetadata) (string, time.Time, error) {
+	return m.create(Session{Role: RoleAdmin, Source: NormalizeSessionSource(source)}, metadata)
+}
+
+func (m *SessionManager) CreateAPIKeyViewer(cpaAPIKeyID int64) (string, time.Time, error) {
+	return m.CreateAPIKeyViewerWithSource(cpaAPIKeyID, SessionSourceStandard)
+}
+
+func (m *SessionManager) CreateAPIKeyViewerWithSource(cpaAPIKeyID int64, source SessionSource) (string, time.Time, error) {
+	return m.CreateAPIKeyViewerWithSourceAndMetadata(cpaAPIKeyID, source, SessionClientMetadata{})
+}
+
+func (m *SessionManager) CreateAPIKeyViewerWithSourceAndMetadata(cpaAPIKeyID int64, source SessionSource, metadata SessionClientMetadata) (string, time.Time, error) {
+	return m.create(Session{Role: RoleAPIKeyViewer, Source: NormalizeSessionSource(source), CPAAPIKeyID: cpaAPIKeyID}, metadata)
+}
+
+func (m *SessionManager) create(session Session, metadata SessionClientMetadata) (string, time.Time, error) {
+	token, err := m.generate()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.cleanupExpiredLocked()
+	now := m.now()
+	expiresAt := now.Add(m.ttl)
+	metadata = normalizeSessionClientMetadata(metadata)
+	session.Source = NormalizeSessionSource(session.Source)
+	session.LoginIP = metadata.IP
+	session.LastSeenIP = metadata.IP
+	session.UserAgent = metadata.UserAgent
+	session.LastSeenAt = now
+	session.ExpiresAt = expiresAt
+	session.CreatedAt = now
+	if m.store != nil {
+		if err := m.store.Save(token, session); err != nil {
+			return "", time.Time{}, fmt.Errorf("save auth session: %w", err)
+		}
+	}
+	m.sessions[token] = session
+
+	return token, expiresAt, nil
+}
+
+// Touch 立即更新内存，并把需要持久化的最近活动合并给单个后台 writer。
+func (m *SessionManager) Touch(token, lastSeenIP string) bool {
+	if token == "" {
+		return false
+	}
+	if _, ok := m.Get(token); !ok {
+		return false
+	}
+
+	m.mu.Lock()
+	session, ok := m.sessions[token]
+	if !ok || !session.ExpiresAt.After(m.now()) {
+		m.mu.Unlock()
+		return false
+	}
+	now := m.now()
+	lastSeenIP = normalizeSessionIP(lastSeenIP)
+	if lastSeenIP == "" {
+		lastSeenIP = session.LastSeenIP
+	}
+	if lastSeenIP == session.LastSeenIP && session.LastSeenAt.Add(sessionActivityWriteInterval).After(now) {
+		m.mu.Unlock()
+		return false
+	}
+	session.LastSeenIP = lastSeenIP
+	session.LastSeenAt = now
+	m.sessions[token] = session
+
+	startWriter := false
+	if m.store != nil {
+		m.pendingActivity[token] = sessionActivityUpdate{token: token, lastSeenIP: lastSeenIP, lastSeenAt: now}
+		if !m.activityWriterRunning {
+			m.activityWriterRunning = true
+			startWriter = true
+		}
+	}
+	m.mu.Unlock()
+
+	if startWriter {
+		go m.writePendingActivity()
+	}
+	return true
+}
+
+// writePendingActivity 串行写入并按 token 合并更新，避免请求等待 SQLite writer。
+func (m *SessionManager) writePendingActivity() {
+	for {
+		m.mu.Lock()
+		var update sessionActivityUpdate
+		found := false
+		for token, pending := range m.pendingActivity {
+			update = pending
+			delete(m.pendingActivity, token)
+			found = true
+			break
+		}
+		if !found {
+			m.activityWriterRunning = false
+			m.mu.Unlock()
+			return
+		}
+		store := m.store
+		m.mu.Unlock()
+
+		if err := store.UpdateActivity(update.token, update.lastSeenIP, update.lastSeenAt); err != nil {
+			logrus.WithError(err).Warn("auth session activity persistence failed")
+		}
+	}
+}
+
+func (m *SessionManager) Validate(token string) bool {
+	_, ok := m.Get(token)
+	return ok
+}
+
+func (m *SessionManager) Get(token string) (Session, bool) {
+	if token == "" {
+		return Session{}, false
+	}
+
+	m.mu.RLock()
+	session, ok := m.sessions[token]
+	m.mu.RUnlock()
+	if !ok {
+		return m.getPersisted(token)
+	}
+	if !session.ExpiresAt.After(m.now()) {
+		m.Delete(token)
+		return Session{}, false
+	}
+	return session, true
+}
+
+func (m *SessionManager) List() []SessionRecord {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.cleanupExpiredLocked()
+	if m.store != nil {
+		records, err := m.store.List(m.now())
+		if err != nil {
+			panic(fmt.Errorf("list auth sessions: %w", err))
+		}
+		cachedByHash := make(map[string]Session, len(m.sessions))
+		for token, session := range m.sessions {
+			cachedByHash[sessionTokenHash(token)] = session
+		}
+		for index := range records {
+			if session, ok := cachedByHash[records[index].TokenHash]; ok {
+				records[index].Alias = session.Alias
+				records[index].LoginIP = session.LoginIP
+				records[index].LastSeenIP = session.LastSeenIP
+				records[index].UserAgent = session.UserAgent
+				records[index].LastSeenAt = session.LastSeenAt
+			}
+		}
+		return records
+	}
+
+	records := make([]SessionRecord, 0, len(m.sessions))
+	for token, session := range m.sessions {
+		records = append(records, SessionRecord{
+			TokenHash:   sessionTokenHash(token),
+			Role:        session.Role,
+			Source:      NormalizeSessionSource(session.Source),
+			Alias:       session.Alias,
+			CPAAPIKeyID: session.CPAAPIKeyID,
+			LoginIP:     session.LoginIP,
+			LastSeenIP:  session.LastSeenIP,
+			UserAgent:   session.UserAgent,
+			LastSeenAt:  session.LastSeenAt,
+			ExpiresAt:   session.ExpiresAt,
+			CreatedAt:   session.CreatedAt,
+		})
+	}
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].CreatedAt.Equal(records[j].CreatedAt) {
+			return records[i].TokenHash < records[j].TokenHash
+		}
+		return records[i].CreatedAt.Before(records[j].CreatedAt)
+	})
+	return records
+}
+
+// UpdateAdminAliasByTokenHash 只更新单个有效管理员会话，并同步内存缓存与持久层。
+func (m *SessionManager) UpdateAdminAliasByTokenHash(tokenHash, alias string) bool {
+	tokenHash = strings.TrimSpace(tokenHash)
+	alias = strings.TrimSpace(alias)
+	if tokenHash == "" {
+		return false
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cleanupExpiredLocked()
+
+	updated := false
+	if m.store != nil {
+		rows, err := m.store.UpdateAdminAliasByTokenHash(tokenHash, alias, m.now())
+		if err != nil {
+			panic(fmt.Errorf("update admin auth session alias: %w", err))
+		}
+		updated = rows > 0
+	}
+	for token, session := range m.sessions {
+		if sessionTokenHash(token) != tokenHash || session.Role != RoleAdmin {
+			continue
+		}
+		if m.store != nil && !updated {
+			return false
+		}
+		session.Alias = alias
+		m.sessions[token] = session
+		updated = true
+	}
+	return updated
+}
+
+func (m *SessionManager) getPersisted(token string) (Session, bool) {
+	if m.store == nil {
+		return Session{}, false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if session, ok := m.sessions[token]; ok {
+		if !session.ExpiresAt.After(m.now()) {
+			delete(m.sessions, token)
+			if err := m.store.Delete(token); err != nil {
+				panic(fmt.Errorf("delete auth session: %w", err))
+			}
+			return Session{}, false
+		}
+		return session, true
+	}
+
+	session, ok, err := m.store.Get(token)
+	if err != nil {
+		panic(fmt.Errorf("load auth session: %w", err))
+	}
+	if !ok {
+		return Session{}, false
+	}
+	if !session.ExpiresAt.After(m.now()) {
+		if err := m.store.Delete(token); err != nil {
+			panic(fmt.Errorf("delete auth session: %w", err))
+		}
+		return Session{}, false
+	}
+	m.sessions[token] = session
+	return session, true
+}
+
+func (m *SessionManager) DeleteByTokenHash(tokenHash string) RevokeResult {
+	tokenHash = strings.TrimSpace(tokenHash)
+	if tokenHash == "" {
+		return RevokeResult{}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.cleanupExpiredLocked()
+	result := RevokeResult{}
+	for token := range m.sessions {
+		if sessionTokenHash(token) != tokenHash {
+			continue
+		}
+		delete(m.sessions, token)
+		result.Deleted = 1
+	}
+	if m.store != nil {
+		deleted, err := m.store.DeleteByTokenHash(tokenHash)
+		if err != nil {
+			panic(fmt.Errorf("delete auth session by token hash: %w", err))
+		}
+		if int(deleted) > result.Deleted {
+			result.Deleted = int(deleted)
+		}
+	}
+	return result
+}
+
+func (m *SessionManager) DeleteByRole(role Role) RevokeResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.cleanupExpiredLocked()
+	result := RevokeResult{}
+	for token, session := range m.sessions {
+		if session.Role != role {
+			continue
+		}
+		delete(m.sessions, token)
+		result.Deleted++
+	}
+	if m.store != nil {
+		deleted, err := m.store.DeleteByRole(role)
+		if err != nil {
+			panic(fmt.Errorf("delete auth sessions by role: %w", err))
+		}
+		if int(deleted) > result.Deleted {
+			result.Deleted = int(deleted)
+		}
+	}
+	return result
+}
+
+func (m *SessionManager) Delete(token string) {
+	if token == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.sessions, token)
+	if m.store != nil {
+		if err := m.store.Delete(token); err != nil {
+			panic(fmt.Errorf("delete auth session: %w", err))
+		}
+	}
+}
+
+func (m *SessionManager) CleanupExpired() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cleanupExpiredLocked()
+}
+
+func (m *SessionManager) cleanupExpiredLocked() {
+	now := m.now()
+	for token, session := range m.sessions {
+		if !session.ExpiresAt.After(now) {
+			delete(m.sessions, token)
+		}
+	}
+	if m.store != nil {
+		if err := m.store.DeleteExpired(now); err != nil {
+			panic(fmt.Errorf("delete expired auth sessions: %w", err))
+		}
+	}
+}
+
+func generateToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+func normalizeSessionClientMetadata(metadata SessionClientMetadata) SessionClientMetadata {
+	metadata.IP = normalizeSessionIP(metadata.IP)
+	return metadata
+}
+
+func normalizeSessionIP(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 64 {
+		return ""
+	}
+	return value
+}
+
+func sessionTimePointer(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	copy := value
+	return &copy
+}

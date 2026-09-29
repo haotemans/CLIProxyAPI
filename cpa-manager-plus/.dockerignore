@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+dist
+.git
+.DS_Store
+npm-debug.log*
+apps/manager-server/*.sqlite
+apps/manager-server/*.sqlite-shm
+apps/manager-server/*.sqlite-wal

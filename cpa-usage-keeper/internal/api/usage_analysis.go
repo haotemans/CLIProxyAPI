@@ -1,0 +1,550 @@
+package api
+
+import (
+	"net/http"
+	"sort"
+	"strconv"
+	"time"
+
+	"cpa-usage-keeper/internal/helper"
+	"cpa-usage-keeper/internal/service"
+	servicedto "cpa-usage-keeper/internal/service/dto"
+	"cpa-usage-keeper/internal/timeutil"
+	"github.com/gin-gonic/gin"
+)
+
+type analysisResponse struct {
+	Granularity           string                    `json:"granularity"`
+	Timezone              string                    `json:"timezone"`
+	RangeStart            *time.Time                `json:"range_start,omitempty"`
+	RangeEnd              *time.Time                `json:"range_end,omitempty"`
+	TokenUsage            []analysisTokenUsage      `json:"token_usage"`
+	ModelUsage            analysisModelUsage        `json:"model_usage"`
+	APIKeyComposition     []analysisCompositionItem `json:"api_key_composition"`
+	ModelComposition      []analysisCompositionItem `json:"model_composition"`
+	AuthFilesComposition  []analysisCompositionItem `json:"auth_files_composition"`
+	AIProviderComposition []analysisCompositionItem `json:"ai_provider_composition"`
+	Heatmap               analysisHeatmap           `json:"heatmap"`
+	CostBreakdown         analysisCostBreakdown     `json:"cost_breakdown"`
+	ModelEfficiency       []analysisModelEfficiency `json:"model_efficiency"`
+}
+
+type analysisTokenUsage struct {
+	Bucket              time.Time `json:"bucket"`
+	InputTokens         int64     `json:"input_tokens"`
+	OutputTokens        int64     `json:"output_tokens"`
+	CacheReadTokens     int64     `json:"cache_read_tokens"`
+	CacheCreationTokens int64     `json:"cache_creation_tokens"`
+	ReasoningTokens     int64     `json:"reasoning_tokens"`
+	TotalTokens         int64     `json:"total_tokens"`
+	Requests            int64     `json:"requests"`
+	CostUSD             float64   `json:"cost_usd"`
+	CostAvailable       bool      `json:"cost_available"`
+}
+
+type analysisModelUsage struct {
+	Buckets []time.Time                `json:"buckets"`
+	Series  []analysisModelUsageSeries `json:"series"`
+}
+
+type analysisModelUsageSeries struct {
+	Model       string  `json:"model"`
+	TotalTokens []int64 `json:"total_tokens"`
+	Requests    []int64 `json:"requests"`
+}
+
+type analysisCompositionItem struct {
+	Key                 string  `json:"key"`
+	Label               string  `json:"label"`
+	TotalTokens         int64   `json:"total_tokens"`
+	Requests            int64   `json:"requests"`
+	Percent             float64 `json:"percent"`
+	InputTokens         int64   `json:"input_tokens"`
+	OutputTokens        int64   `json:"output_tokens"`
+	CacheReadTokens     int64   `json:"cache_read_tokens"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens"`
+	ReasoningTokens     int64   `json:"reasoning_tokens"`
+	CostUSD             float64 `json:"cost_usd"`
+	CostAvailable       bool    `json:"cost_available"`
+}
+
+type analysisHeatmap struct {
+	APIKeys      []string              `json:"api_keys"`
+	APIKeyLabels map[string]string     `json:"api_key_labels"`
+	Models       []string              `json:"models"`
+	Cells        []analysisHeatmapCell `json:"cells"`
+}
+
+type analysisHeatmapCell struct {
+	APIKey              string  `json:"api_key"`
+	Model               string  `json:"model"`
+	InputTokens         int64   `json:"input_tokens"`
+	OutputTokens        int64   `json:"output_tokens"`
+	CacheReadTokens     int64   `json:"cache_read_tokens"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens"`
+	ReasoningTokens     int64   `json:"reasoning_tokens"`
+	TotalTokens         int64   `json:"total_tokens"`
+	Requests            int64   `json:"requests"`
+	CostUSD             float64 `json:"cost_usd"`
+	CostAvailable       bool    `json:"cost_available"`
+	Intensity           float64 `json:"intensity"`
+}
+
+type analysisCostBreakdown struct {
+	UncachedInputCostUSD float64 `json:"uncached_input_cost_usd"`
+	CacheReadCostUSD     float64 `json:"cache_read_cost_usd"`
+	CacheWriteCostUSD    float64 `json:"cache_write_cost_usd"`
+	OutputCostUSD        float64 `json:"output_cost_usd"`
+	TotalCostUSD         float64 `json:"total_cost_usd"`
+	CostAvailable        bool    `json:"cost_available"`
+}
+
+type analysisModelEfficiency struct {
+	Model                  string  `json:"model"`
+	Requests               int64   `json:"requests"`
+	InputTokens            int64   `json:"input_tokens"`
+	OutputTokens           int64   `json:"output_tokens"`
+	CacheReadTokens        int64   `json:"cache_read_tokens"`
+	CacheCreationTokens    int64   `json:"cache_creation_tokens"`
+	ReasoningTokens        int64   `json:"reasoning_tokens"`
+	TotalTokens            int64   `json:"total_tokens"`
+	CostUSD                float64 `json:"cost_usd"`
+	CostAvailable          bool    `json:"cost_available"`
+	CostPerRequestUSD      float64 `json:"cost_per_request_usd"`
+	OutputTokensPerRequest float64 `json:"output_tokens_per_request"`
+	CacheReadRate          float64 `json:"cache_read_rate"`
+}
+
+type analysisLatencyPoint struct {
+	TTFTMS    int64 `json:"ttft_ms"`
+	LatencyMS int64 `json:"latency_ms"`
+}
+
+type analysisLatencyDensityCell struct {
+	TTFTMinMS    int64   `json:"ttft_min_ms"`
+	TTFTMaxMS    int64   `json:"ttft_max_ms"`
+	LatencyMinMS int64   `json:"latency_min_ms"`
+	LatencyMaxMS int64   `json:"latency_max_ms"`
+	Count        int64   `json:"count"`
+	Intensity    float64 `json:"intensity"`
+}
+
+type analysisLatencyDiagnostics struct {
+	Supported         bool                         `json:"supported"`
+	UnsupportedReason string                       `json:"unsupported_reason,omitempty"`
+	Points            []analysisLatencyPoint       `json:"points"`
+	Density           []analysisLatencyDensityCell `json:"density"`
+	TotalPoints       int64                        `json:"total_points"`
+	Sampled           bool                         `json:"sampled"`
+	P95TTFTMS         int64                        `json:"p95_ttft_ms"`
+	P95LatencyMS      int64                        `json:"p95_latency_ms"`
+	MaxTTFTMS         int64                        `json:"max_ttft_ms"`
+	MaxLatencyMS      int64                        `json:"max_latency_ms"`
+}
+
+type analysisAPIKeyInfo struct {
+	ID    string
+	Label string
+}
+
+func registerUsageAnalysisRoute(router gin.IRoutes, usageProvider service.UsageProvider, cpaAPIKeyProvider service.CPAAPIKeyProvider) {
+	router.GET("/usage/analysis", func(c *gin.Context) {
+		if usageProvider == nil {
+			c.JSON(http.StatusOK, emptyAnalysisResponse())
+			return
+		}
+
+		filter, err := parseUsageAnalysisTimeFilterQuery(c.Request, timeutil.NormalizeStorageTime(time.Now()))
+		if err != nil {
+			writeUsageFilterParseError(c, err)
+			return
+		}
+
+		analysis, err := usageProvider.GetAnalysis(c.Request.Context(), filter)
+		if err != nil {
+			writeInternalError(c, "get analysis failed", err)
+			return
+		}
+		apiKeyInfos, err := loadCPAAPIKeyInfos(c, cpaAPIKeyProvider)
+		if err != nil {
+			return
+		}
+
+		c.JSON(http.StatusOK, buildAnalysisPayload(analysis, apiKeyInfos))
+	})
+
+	router.GET("/usage/analysis/latency", func(c *gin.Context) {
+		if usageProvider == nil {
+			c.JSON(http.StatusOK, emptyAnalysisLatencyDiagnosticsResponse())
+			return
+		}
+
+		filter, err := parseUsageAnalysisTimeFilterQuery(c.Request, timeutil.NormalizeStorageTime(time.Now()))
+		if err != nil {
+			writeUsageFilterParseError(c, err)
+			return
+		}
+
+		latency, err := usageProvider.GetAnalysisLatency(c.Request.Context(), filter)
+		if err != nil {
+			writeInternalError(c, "get analysis latency failed", err)
+			return
+		}
+		if latency == nil {
+			c.JSON(http.StatusOK, emptyAnalysisLatencyDiagnosticsResponse())
+			return
+		}
+		c.JSON(http.StatusOK, buildAnalysisLatencyDiagnosticsPayload(*latency))
+	})
+}
+
+func registerKeyUsageAnalysisRoute(router gin.IRoutes, usageProvider service.UsageProvider) {
+	router.GET("/key-analysis", func(c *gin.Context) {
+		session, apiKey, ok := activeAPIKeyViewerContext(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+		if usageProvider == nil {
+			c.JSON(http.StatusOK, emptyAnalysisResponse())
+			return
+		}
+		filter, err := parseKeyUsageAnalysisTimeFilterQuery(c.Request, timeutil.NormalizeStorageTime(time.Now()))
+		if err != nil {
+			writeUsageFilterParseError(c, err)
+			return
+		}
+		// Viewer 的数据范围只由 session 决定，客户端 api_key_id 不参与解析或过滤。
+		filter.APIKeyID = strconv.FormatInt(session.CPAAPIKeyID, 10)
+		analysis, err := usageProvider.GetAnalysis(c.Request.Context(), filter)
+		if err != nil {
+			writeInternalError(c, "get key analysis failed", err)
+			return
+		}
+		apiKeyInfos := map[string]analysisAPIKeyInfo{
+			apiKey.APIKey: {ID: strconv.FormatInt(apiKey.ID, 10), Label: helper.CPAAPIKeyDisplayName(apiKey)},
+		}
+		payload := buildAnalysisPayload(analysis, apiKeyInfos)
+		// 来源身份属于管理员视图；Viewer JSON 在服务端直接清空，避免仅靠 UI 隐藏。
+		payload.AuthFilesComposition = []analysisCompositionItem{}
+		payload.AIProviderComposition = []analysisCompositionItem{}
+		c.JSON(http.StatusOK, payload)
+	})
+
+	router.GET("/key-analysis/latency", func(c *gin.Context) {
+		session, _, ok := activeAPIKeyViewerContext(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+		if usageProvider == nil {
+			c.JSON(http.StatusOK, emptyAnalysisLatencyDiagnosticsResponse())
+			return
+		}
+		filter, err := parseKeyUsageAnalysisTimeFilterQuery(c.Request, timeutil.NormalizeStorageTime(time.Now()))
+		if err != nil {
+			writeUsageFilterParseError(c, err)
+			return
+		}
+		filter.APIKeyID = strconv.FormatInt(session.CPAAPIKeyID, 10)
+		latency, err := usageProvider.GetAnalysisLatency(c.Request.Context(), filter)
+		if err != nil {
+			writeInternalError(c, "get key analysis latency failed", err)
+			return
+		}
+		if latency == nil {
+			c.JSON(http.StatusOK, emptyAnalysisLatencyDiagnosticsResponse())
+			return
+		}
+		c.JSON(http.StatusOK, buildAnalysisLatencyDiagnosticsPayload(*latency))
+	})
+}
+
+func emptyAnalysisResponse() analysisResponse {
+	return analysisResponse{
+		Granularity:           string(servicedto.AnalysisGranularityHourly),
+		Timezone:              time.Local.String(),
+		TokenUsage:            []analysisTokenUsage{},
+		ModelUsage:            analysisModelUsage{Buckets: []time.Time{}, Series: []analysisModelUsageSeries{}},
+		APIKeyComposition:     []analysisCompositionItem{},
+		ModelComposition:      []analysisCompositionItem{},
+		AuthFilesComposition:  []analysisCompositionItem{},
+		AIProviderComposition: []analysisCompositionItem{},
+		Heatmap:               analysisHeatmap{APIKeys: []string{}, APIKeyLabels: map[string]string{}, Models: []string{}, Cells: []analysisHeatmapCell{}},
+		CostBreakdown:         analysisCostBreakdown{CostAvailable: true},
+		ModelEfficiency:       []analysisModelEfficiency{},
+	}
+}
+
+func emptyAnalysisLatencyDiagnosticsResponse() analysisLatencyDiagnostics {
+	return analysisLatencyDiagnostics{Supported: true, Points: []analysisLatencyPoint{}, Density: []analysisLatencyDensityCell{}}
+}
+
+func loadCPAAPIKeyInfos(c *gin.Context, provider service.CPAAPIKeyProvider) (map[string]analysisAPIKeyInfo, error) {
+	if provider == nil {
+		return map[string]analysisAPIKeyInfo{}, nil
+	}
+	rows, err := provider.ListCPAAPIKeys(c.Request.Context())
+	if err != nil {
+		writeInternalError(c, "list api key options failed", err)
+		return nil, err
+	}
+	infos := make(map[string]analysisAPIKeyInfo, len(rows))
+	for _, row := range rows {
+		infos[row.APIKey] = analysisAPIKeyInfo{
+			ID:    strconv.FormatInt(row.ID, 10),
+			Label: helper.CPAAPIKeyDisplayName(row),
+		}
+	}
+	return infos, nil
+}
+
+func buildAnalysisPayload(snapshot *servicedto.AnalysisSnapshot, apiKeyInfos map[string]analysisAPIKeyInfo) analysisResponse {
+	if snapshot == nil {
+		return emptyAnalysisResponse()
+	}
+	tokenUsage := make([]analysisTokenUsage, 0, len(snapshot.TokenUsage))
+	for _, bucket := range snapshot.TokenUsage {
+		tokenUsage = append(tokenUsage, analysisTokenUsage{
+			Bucket:              bucket.Bucket,
+			InputTokens:         bucket.InputTokens,
+			OutputTokens:        bucket.OutputTokens,
+			CacheReadTokens:     bucket.CacheReadTokens,
+			CacheCreationTokens: bucket.CacheCreationTokens,
+			ReasoningTokens:     bucket.ReasoningTokens,
+			TotalTokens:         bucket.TotalTokens,
+			Requests:            bucket.Requests,
+			CostUSD:             bucket.CostUSD,
+			CostAvailable:       bucket.CostAvailable,
+		})
+	}
+	apiComposition := buildAnalysisCompositionPayload(snapshot.APIKeyComposition, apiKeyInfos)
+	modelComposition := buildAnalysisCompositionPayload(snapshot.ModelComposition, nil)
+	authFilesComposition := buildAnalysisCompositionPayload(snapshot.AuthFilesComposition, nil)
+	aiProviderComposition := buildAnalysisCompositionPayload(snapshot.AIProviderComposition, nil)
+	return analysisResponse{
+		Granularity:           string(snapshot.Granularity),
+		Timezone:              time.Local.String(),
+		RangeStart:            snapshot.RangeStart,
+		RangeEnd:              snapshot.RangeEnd,
+		TokenUsage:            tokenUsage,
+		ModelUsage:            buildAnalysisModelUsagePayload(snapshot.TokenUsage, snapshot.ModelUsage),
+		APIKeyComposition:     apiComposition,
+		ModelComposition:      modelComposition,
+		AuthFilesComposition:  authFilesComposition,
+		AIProviderComposition: aiProviderComposition,
+		Heatmap:               buildAnalysisHeatmapPayload(snapshot.Heatmap, apiKeyInfos),
+		CostBreakdown: analysisCostBreakdown{
+			UncachedInputCostUSD: snapshot.CostBreakdown.UncachedInputCostUSD,
+			CacheReadCostUSD:     snapshot.CostBreakdown.CacheReadCostUSD,
+			CacheWriteCostUSD:    snapshot.CostBreakdown.CacheWriteCostUSD,
+			OutputCostUSD:        snapshot.CostBreakdown.OutputCostUSD,
+			TotalCostUSD:         snapshot.CostBreakdown.TotalCostUSD,
+			CostAvailable:        snapshot.CostBreakdown.CostAvailable,
+		},
+		ModelEfficiency: buildAnalysisModelEfficiencyPayload(snapshot.ModelEfficiency),
+	}
+}
+
+func buildAnalysisModelUsagePayload(tokenUsage []servicedto.AnalysisTokenUsageBucket, rows []servicedto.AnalysisModelUsage) analysisModelUsage {
+	buckets := make([]time.Time, 0, len(tokenUsage))
+	bucketIndexes := make(map[int64]int, len(tokenUsage))
+	for index, bucket := range tokenUsage {
+		buckets = append(buckets, bucket.Bucket)
+		bucketIndexes[bucket.Bucket.UnixNano()] = index
+	}
+
+	seriesByModel := make(map[string]*analysisModelUsageSeries)
+	totalsByModel := make(map[string]int64)
+	for _, row := range rows {
+		bucketIndex, ok := bucketIndexes[row.Bucket.UnixNano()]
+		if !ok {
+			continue
+		}
+		series := seriesByModel[row.Model]
+		if series == nil {
+			series = &analysisModelUsageSeries{
+				Model:       row.Model,
+				TotalTokens: make([]int64, len(buckets)),
+				Requests:    make([]int64, len(buckets)),
+			}
+			seriesByModel[row.Model] = series
+		}
+		series.TotalTokens[bucketIndex] += row.TotalTokens
+		series.Requests[bucketIndex] += row.Requests
+		totalsByModel[row.Model] += row.TotalTokens
+	}
+
+	series := make([]analysisModelUsageSeries, 0, len(seriesByModel))
+	for _, item := range seriesByModel {
+		series = append(series, *item)
+	}
+	sort.Slice(series, func(i, j int) bool {
+		if totalsByModel[series[i].Model] == totalsByModel[series[j].Model] {
+			return series[i].Model < series[j].Model
+		}
+		return totalsByModel[series[i].Model] > totalsByModel[series[j].Model]
+	})
+	return analysisModelUsage{Buckets: buckets, Series: series}
+}
+
+func buildAnalysisLatencyDiagnosticsPayload(diagnostics servicedto.AnalysisLatencyDiagnostics) analysisLatencyDiagnostics {
+	points := make([]analysisLatencyPoint, 0, len(diagnostics.Points))
+	for _, point := range diagnostics.Points {
+		points = append(points, analysisLatencyPoint{
+			TTFTMS:    point.TTFTMS,
+			LatencyMS: point.LatencyMS,
+		})
+	}
+	density := make([]analysisLatencyDensityCell, 0, len(diagnostics.Density))
+	for _, cell := range diagnostics.Density {
+		density = append(density, analysisLatencyDensityCell{
+			TTFTMinMS:    cell.TTFTMinMS,
+			TTFTMaxMS:    cell.TTFTMaxMS,
+			LatencyMinMS: cell.LatencyMinMS,
+			LatencyMaxMS: cell.LatencyMaxMS,
+			Count:        cell.Count,
+			Intensity:    cell.Intensity,
+		})
+	}
+	return analysisLatencyDiagnostics{
+		Supported:    true,
+		Points:       points,
+		Density:      density,
+		TotalPoints:  diagnostics.TotalPoints,
+		Sampled:      diagnostics.Sampled,
+		P95TTFTMS:    diagnostics.P95TTFTMS,
+		P95LatencyMS: diagnostics.P95LatencyMS,
+		MaxTTFTMS:    diagnostics.MaxTTFTMS,
+		MaxLatencyMS: diagnostics.MaxLatencyMS,
+	}
+}
+
+func buildAnalysisCompositionPayload(items []servicedto.AnalysisCompositionItem, apiKeyInfos map[string]analysisAPIKeyInfo) []analysisCompositionItem {
+	total := int64(0)
+	for _, item := range items {
+		total += item.TotalTokens
+	}
+	payload := make([]analysisCompositionItem, 0, len(items))
+	for _, item := range items {
+		key := helper.RedactSensitiveValue(item.Key)
+		label := item.Key
+		if apiKeyInfos != nil {
+			key = analysisAPIKeyResponseKey(item.Key, apiKeyInfos)
+			label = analysisAPIKeyLabel(item.Key, apiKeyInfos)
+		} else if item.Label != "" {
+			label = item.Label
+		}
+		percent := 0.0
+		if total > 0 {
+			percent = (float64(item.TotalTokens) / float64(total)) * 100
+		}
+		payload = append(payload, analysisCompositionItem{
+			Key:                 key,
+			Label:               label,
+			TotalTokens:         item.TotalTokens,
+			Requests:            item.Requests,
+			Percent:             percent,
+			InputTokens:         item.InputTokens,
+			OutputTokens:        item.OutputTokens,
+			CacheReadTokens:     item.CacheReadTokens,
+			CacheCreationTokens: item.CacheCreationTokens,
+			ReasoningTokens:     item.ReasoningTokens,
+			CostUSD:             item.CostUSD,
+			CostAvailable:       item.CostAvailable,
+		})
+	}
+	return payload
+}
+
+func analysisAPIKeyResponseKey(apiKey string, apiKeyInfos map[string]analysisAPIKeyInfo) string {
+	// Analysis 的结构标识使用 CPA API Key id，展示文案独立走别名/脱敏 key，避免脱敏值碰撞。
+	if info, ok := apiKeyInfos[apiKey]; ok && info.ID != "" {
+		return info.ID
+	}
+	return helper.RedactSensitiveValue(apiKey)
+}
+
+func analysisAPIKeyLabel(apiKey string, apiKeyInfos map[string]analysisAPIKeyInfo) string {
+	if info, ok := apiKeyInfos[apiKey]; ok && info.Label != "" {
+		return info.Label
+	}
+	return helper.RedactSensitiveValue(apiKey)
+}
+
+func buildAnalysisHeatmapPayload(cells []servicedto.AnalysisHeatmapCell, apiKeyInfos map[string]analysisAPIKeyInfo) analysisHeatmap {
+	apiRequests := map[string]int64{}
+	apiKeyLabels := map[string]string{}
+	modelRequests := map[string]int64{}
+	maxTokens := int64(0)
+	for _, cell := range cells {
+		apiKey := analysisAPIKeyResponseKey(cell.APIKey, apiKeyInfos)
+		apiKeyLabels[apiKey] = analysisAPIKeyLabel(cell.APIKey, apiKeyInfos)
+		apiRequests[apiKey] += cell.Requests
+		modelRequests[cell.Model] += cell.Requests
+		if cell.TotalTokens > maxTokens {
+			maxTokens = cell.TotalTokens
+		}
+	}
+	apiKeys := sortedHeatmapKeysByRequests(apiRequests)
+	models := sortedHeatmapKeysByRequests(modelRequests)
+	payloadCells := make([]analysisHeatmapCell, 0, len(cells))
+	for _, cell := range cells {
+		intensity := 0.0
+		if maxTokens > 0 {
+			intensity = float64(cell.TotalTokens) / float64(maxTokens)
+		}
+		apiKey := analysisAPIKeyResponseKey(cell.APIKey, apiKeyInfos)
+		payloadCells = append(payloadCells, analysisHeatmapCell{
+			APIKey:              apiKey,
+			Model:               cell.Model,
+			InputTokens:         cell.InputTokens,
+			OutputTokens:        cell.OutputTokens,
+			CacheReadTokens:     cell.CacheReadTokens,
+			CacheCreationTokens: cell.CacheCreationTokens,
+			ReasoningTokens:     cell.ReasoningTokens,
+			TotalTokens:         cell.TotalTokens,
+			Requests:            cell.Requests,
+			CostUSD:             cell.CostUSD,
+			CostAvailable:       cell.CostAvailable,
+			Intensity:           intensity,
+		})
+	}
+	return analysisHeatmap{APIKeys: apiKeys, APIKeyLabels: apiKeyLabels, Models: models, Cells: payloadCells}
+}
+
+func buildAnalysisModelEfficiencyPayload(items []servicedto.AnalysisModelEfficiencyItem) []analysisModelEfficiency {
+	payload := make([]analysisModelEfficiency, 0, len(items))
+	for _, item := range items {
+		payload = append(payload, analysisModelEfficiency{
+			Model:                  item.Model,
+			Requests:               item.Requests,
+			InputTokens:            item.InputTokens,
+			OutputTokens:           item.OutputTokens,
+			CacheReadTokens:        item.CacheReadTokens,
+			CacheCreationTokens:    item.CacheCreationTokens,
+			ReasoningTokens:        item.ReasoningTokens,
+			TotalTokens:            item.TotalTokens,
+			CostUSD:                item.CostUSD,
+			CostAvailable:          item.CostAvailable,
+			CostPerRequestUSD:      item.CostPerRequestUSD,
+			OutputTokensPerRequest: item.OutputTokensPerRequest,
+			CacheReadRate:          item.CacheReadRate,
+		})
+	}
+	return payload
+}
+
+func sortedHeatmapKeysByRequests(requestsByKey map[string]int64) []string {
+	keys := make([]string, 0, len(requestsByKey))
+	for key := range requestsByKey {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if requestsByKey[keys[i]] == requestsByKey[keys[j]] {
+			return keys[i] < keys[j]
+		}
+		return requestsByKey[keys[i]] > requestsByKey[keys[j]]
+	})
+	return keys
+}

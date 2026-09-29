@@ -12,6 +12,7 @@ Personal fork of [router-for-me/CLIProxyAPI](https://github.com/router-for-me/CL
 - **Usage cost accounting** — upstream-reported request cost (Cline `usage.cost`) is captured into usage details and exposed as `tokens.cost_usd` on the usage queue (`/v0/management/usage-queue`, needs `usage-statistics-enabled: true`). Token counters were already there; money is now there too.
 - **In-repo management panel** — the Management Center frontend lives in `management-center/` (Vite single-file build) and gets served from `static/management.html` instead of the downloaded GitHub asset. It ships the Cline OAuth card and the Mirasim key family.
 - **In-repo new-api** — [QuantumNous/new-api](https://github.com/QuantumNous/new-api) vendored under `new-api/` for the side-by-side gateway deployment (self-use branch `mellow-rolling-falcon`).
+- **In-repo ecosystem sidecars** — [cpa-usage-keeper](https://github.com/Willxup/cpa-usage-keeper) (usage persistence + analytics dashboard) vendored under `cpa-usage-keeper/`, and [CPA-Manager-Plus](https://github.com/seakee/CPA-Manager-Plus) (request-level monitoring, price estimation, Codex pool inspection) vendored under `cpa-manager-plus/`. Optional compose: `docker-compose.ecosystem.yaml`.
 
 Upstream highlights that still apply: Gemini / Claude / Codex / Grok / Kimi OAuth pools with round-robin, OpenAI-compatible upstreams, streaming + tool calling, model registry with remote updates, hot-reload, management API + TUI, embeddable Go SDK.
 

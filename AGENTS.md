@@ -43,6 +43,9 @@ go build -o test-output ./cmd/server && rm test-output # Verify compile (REQUIRE
 - `new-api/` — In-repo copy of the new-api AI gateway (Go backend + React web admin, deployed alongside this proxy). Independent Go module and its own `AGENTS.md`/`web/AGENTS.md` conventions apply; not part of the root Go module. Build web first (`cd new-api/web && bun install --frozen-lockfile && bun run build`, embed requires `web/dist`), then `go build` inside `new-api/`
 - `docker-compose.newapi.yaml` — Optional compose merge file adding the new-api service in front of cli-proxy-api (`docker compose -f docker-compose.yml -f docker-compose.newapi.yaml up -d`)
 - `scripts/newapi-bootstrap.sh` — First-run bootstrap for the new-api integration (setup wizard, admin login, CLIProxyAPI channel creation); see `docs/new-api-integration.md`
+- `cpa-usage-keeper/` — Vendored usage persistence + analytics sidecar (Go module, web UI; own README; keep pristine and re-vendor to update)
+- `cpa-manager-plus/` — Vendored manager-center sidecar (npm workspaces `apps/web` + Go `apps/manager-server`; keep pristine and re-vendor to update)
+- `docker-compose.ecosystem.yaml` — Optional compose merge file running the two sidecars next to cli-proxy-api
 - `test/` — Cross-module integration tests
 
 ## Code Conventions
