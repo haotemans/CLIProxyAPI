@@ -36,6 +36,7 @@ type staticModelsJSON struct {
 	Devin       []*ModelInfo `json:"devin"`
 	Meta        []*ModelInfo `json:"meta"`
 	Cline       []*ModelInfo `json:"cline"`
+	Cursor      []*ModelInfo `json:"cursor"`
 }
 
 // GetClaudeModels returns the standard Claude model definitions.
@@ -91,6 +92,11 @@ func GetAntigravityModels() []*ModelInfo {
 // GetClineModels returns the standard Cline model definitions.
 func GetClineModels() []*ModelInfo {
 	return cloneModelInfos(getModels().Cline)
+}
+
+// GetCursorModels returns the standard Cursor model definitions.
+func GetCursorModels() []*ModelInfo {
+	return cloneModelInfos(getModels().Cursor)
 }
 
 var staticDevinModels = []*ModelInfo{
@@ -487,6 +493,7 @@ func cloneModelInfos(models []*ModelInfo) []*ModelInfo {
 //   - devin
 //   - meta
 //   - cline
+//   - cursor
 func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 	key := strings.ToLower(strings.TrimSpace(channel))
 	switch key {
@@ -514,6 +521,8 @@ func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 		return GetMetaModels()
 	case "cline":
 		return GetClineModels()
+	case "cursor":
+		return GetCursorModels()
 	default:
 		return nil
 	}

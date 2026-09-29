@@ -10,6 +10,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelconfig"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/config"
 )
@@ -200,6 +201,11 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 		if detected := clineauth.ModelsFromMetadata(a.Metadata); len(detected) > 0 {
 			models = buildClineDetectedModels(detected)
 		}
+		models = applyExcludedModels(models, excluded)
+	case "cursor":
+		// Probe the account's usable models through the Cursor agent API;
+		// the static registry catalog remains the fallback on any failure.
+		models = executor.FetchCursorModels(ctx, a, s.cfg)
 		models = applyExcludedModels(models, excluded)
 	default:
 		// Handle OpenAI-compatibility providers by name using config

@@ -22,6 +22,7 @@ import { validateDevinCallback } from './devinOAuth';
 import styles from './OAuthPage.module.scss';
 import iconMeta from '@/assets/icons/meta.svg';
 import iconCline from '@/assets/icons/cline.svg';
+import iconCursor from '@/assets/icons/cursor.svg';
 import iconCodex from '@/assets/icons/codex.svg';
 import iconClaude from '@/assets/icons/claude.svg';
 import iconAntigravity from '@/assets/icons/antigravity.svg';
@@ -139,6 +140,12 @@ const PROVIDERS: BuiltInOAuthProviderCard[] = [
     id: 'cline',
     titleKey: 'auth_login.cline_oauth_title',
     icon: iconCline,
+  },
+  {
+    kind: 'builtin',
+    id: 'cursor',
+    titleKey: 'auth_login.cursor_oauth_title',
+    icon: iconCursor,
   },
 ];
 

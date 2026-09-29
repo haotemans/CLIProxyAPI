@@ -8,6 +8,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   codex: 'Codex',
   claude: 'Claude',
   cline: 'Cline',
+  cursor: 'Cursor',
   mirasim: 'Mirasim',
   devin: 'Devin',
   meta: 'Muse (Meta)',

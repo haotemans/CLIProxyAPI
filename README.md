@@ -8,6 +8,7 @@ Personal fork of [router-for-me/CLIProxyAPI](https://github.com/router-for-me/CL
 
 - **Mirasim provider** — first-class `mirasim` API-key provider for Anthropic-protocol reverse proxies (Bearer key, mandatory `base-url`, models fall back to the Claude catalog, alias mapping, thinking config, full Management API and panel support).
 - **Cline provider** — first-class `cline` OAuth provider: WorkOS device-flow login (`--cline-login`, Management API, TUI), rotating token refresh, and **first-import model detection** so each account only advertises the models it can actually use (probed from `api.cline.bot`, persisted into the credential file).
+- **Cursor provider** — first-class `cursor` OAuth provider: PKCE URL-poll login (`--cursor-login`, Management API, TUI — no local callback, works headless), automatic token refresh, per-account model discovery via `GetUsableModels`, streaming + tool calling over Cursor's Connect/protobuf agent RPC.
 - **Usage cost accounting** — upstream-reported request cost (Cline `usage.cost`) is captured into usage details and exposed as `tokens.cost_usd` on the usage queue (`/v0/management/usage-queue`, needs `usage-statistics-enabled: true`). Token counters were already there; money is now there too.
 - **In-repo management panel** — the Management Center frontend lives in `management-center/` (Vite single-file build) and gets served from `static/management.html` instead of the downloaded GitHub asset. It ships the Cline OAuth card and the Mirasim key family.
 - **In-repo new-api** — [QuantumNous/new-api](https://github.com/QuantumNous/new-api) vendored under `new-api/` for the side-by-side gateway deployment (self-use branch `mellow-rolling-falcon`).
@@ -24,6 +25,7 @@ cp config.example.yaml config.yaml   # edit: access.api-keys, management.secret-
 
 # account logins (OAuth)
 ./cli-proxy-api --cline-login        # Cline device flow
+./cli-proxy-api --cursor-login       # Cursor (open URL, then poll)
 ./cli-proxy-api --claude-login       # Claude subscription
 ```
 

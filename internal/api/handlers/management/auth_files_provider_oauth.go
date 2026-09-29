@@ -18,6 +18,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/claude"
 	clineauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/cline"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/codex"
+	cursorauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/cursor"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/kimi"
 	metaauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/meta"
 	xaiauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/xai"
@@ -754,6 +755,98 @@ func (h *Handler) RequestClineToken(c *gin.Context) {
 		response["expires_in"] = int(clineauth.MaxPollDuration / time.Second)
 	}
 	c.JSON(200, response)
+}
+
+func (h *Handler) RequestCursorToken(c *gin.Context) {
+	ctx := context.Background()
+	ctx = PopulateAuthContext(ctx, c)
+
+	label := strings.TrimSpace(c.Query("label"))
+	fmt.Printf("Initializing Cursor authentication (label=%q)...\n", label)
+
+	authParams, err := cursorauth.GenerateAuthParams()
+	if err != nil {
+		log.Errorf("Failed to generate Cursor auth params: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate auth params"})
+		return
+	}
+
+	state := fmt.Sprintf("cur-%d", time.Now().UnixNano())
+	authSvc := cursorauth.NewCursorAuth(h.cfg)
+
+	RegisterOAuthSession(state, "cursor")
+
+	go func() {
+		pollCtx, cancelPoll := context.WithCancel(ctx)
+		defer cancelPoll()
+		go watchOAuthSessionCancel(pollCtx, cancelPoll, state, "cursor")
+
+		fmt.Println("Waiting for Cursor authentication...")
+		tokens, errPoll := authSvc.PollForAuth(pollCtx, authParams.UUID, authParams.Verifier)
+		if errPoll != nil {
+			if !IsOAuthSessionPending(state, "cursor") {
+				return
+			}
+			log.Errorf("Cursor authentication failed: %v", errPoll)
+			SetOAuthSessionError(state, oauthSessionErrorWithCause("Authentication failed", errPoll))
+			return
+		}
+		if !IsOAuthSessionPending(state, "cursor") {
+			return
+		}
+		if strings.TrimSpace(tokens.AccessToken) == "" {
+			log.Error("Cursor auth returned empty access token")
+			SetOAuthSessionError(state, "Failed to exchange token")
+			return
+		}
+
+		metadata := map[string]any{
+			"type":          "cursor",
+			"access_token":  tokens.AccessToken,
+			"refresh_token": tokens.RefreshToken,
+			"timestamp":     time.Now().UnixMilli(),
+		}
+
+		// Extract expiry and account identity from the JWT.
+		expiry := cursorauth.GetTokenExpiry(tokens.AccessToken)
+		if !expiry.IsZero() {
+			metadata["expires_at"] = expiry.Format(time.RFC3339)
+		}
+		sub := cursorauth.ParseJWTSub(tokens.AccessToken)
+		subHash := cursorauth.SubToShortHash(sub)
+		if sub != "" {
+			metadata["sub"] = sub
+		}
+
+		fileName := cursorauth.CredentialFileName(label, subHash)
+		record := &coreauth.Auth{
+			ID:       fileName,
+			Provider: "cursor",
+			FileName: fileName,
+			Label:    cursorauth.DisplayLabel(label, subHash),
+			Metadata: metadata,
+		}
+		if errGuard := guardOAuthSessionPendingForSave(state, "cursor"); errGuard != nil {
+			return
+		}
+		savedPath, errSave := h.saveTokenRecord(ctx, record)
+		if errSave != nil {
+			log.Errorf("Failed to save Cursor token to file: %v", errSave)
+			SetOAuthSessionError(state, "Failed to save token to file")
+			return
+		}
+
+		CompleteOAuthSession(state)
+		fmt.Printf("Authentication successful! Token saved to %s\n", savedPath)
+		fmt.Println("You can now use Cursor services through this CLI")
+	}()
+
+	c.JSON(200, gin.H{
+		"status": "ok",
+		"url":    authParams.LoginURL,
+		"state":  state,
+		"flow":   "poll",
+	})
 }
 
 func (h *Handler) RequestMetaToken(c *gin.Context) {

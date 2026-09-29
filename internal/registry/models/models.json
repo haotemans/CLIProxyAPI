@@ -4943,5 +4943,126 @@
         "text"
       ]
     }
+  ],
+  "cursor": [
+    {
+      "id": "composer-2",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "cursor",
+      "type": "cursor",
+      "display_name": "Composer 2",
+      "description": "Cursor Composer 2 served through the Cursor agent API",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "max": 50000,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "claude-4-sonnet",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "cursor",
+      "type": "cursor",
+      "display_name": "Claude 4 Sonnet",
+      "description": "Claude 4 Sonnet served through the Cursor agent API",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "max": 50000,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "claude-3.5-sonnet",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "cursor",
+      "type": "cursor",
+      "display_name": "Claude 3.5 Sonnet",
+      "description": "Claude 3.5 Sonnet served through the Cursor agent API",
+      "context_length": 200000,
+      "max_completion_tokens": 8192,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "gpt-4o",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "cursor",
+      "type": "cursor",
+      "display_name": "GPT-4o",
+      "description": "GPT-4o served through the Cursor agent API",
+      "context_length": 128000,
+      "max_completion_tokens": 16384,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "cursor-small",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "cursor",
+      "type": "cursor",
+      "display_name": "Cursor Small",
+      "description": "Cursor Small served through the Cursor agent API",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "supportedInputModalities": [
+        "text"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "gemini-2.5-pro",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "cursor",
+      "type": "cursor",
+      "display_name": "Gemini 2.5 Pro",
+      "description": "Gemini 2.5 Pro served through the Cursor agent API",
+      "context_length": 1000000,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "max": 50000,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    }
   ]
 }
