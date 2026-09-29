@@ -4,6 +4,7 @@ import iconClaude from '@/assets/icons/claude.svg';
 import iconCodex from '@/assets/icons/codex.svg';
 import iconCline from '@/assets/icons/cline.svg';
 import iconCursor from '@/assets/icons/cursor.svg';
+import iconKiro from '@/assets/icons/kiro.svg';
 import iconMeta from '@/assets/icons/meta.svg';
 import iconDevin from '@/assets/icons/devin.svg';
 import iconDevinDark from '@/assets/icons/devin-dark.svg';
@@ -84,6 +85,7 @@ export const AUTH_FILE_ICONS: Record<string, AuthFileIconAsset> = {
   claude: iconClaude,
   cline: iconCline,
   cursor: iconCursor,
+  kiro: iconKiro,
   codex: iconCodex,
   meta: iconMeta,
   devin: { light: iconDevin, dark: iconDevinDark },

@@ -30,6 +30,7 @@ func newDefaultAuthManager() *sdkAuth.Manager {
 		sdkAuth.NewMetaAuthenticator(),
 		sdkAuth.NewClineAuthenticator(),
 		sdkAuth.NewCursorAuthenticator(),
+		sdkAuth.NewKiroAuthenticator(),
 	)
 }
 

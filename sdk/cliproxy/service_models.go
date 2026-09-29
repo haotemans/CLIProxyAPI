@@ -207,6 +207,11 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 		// the static registry catalog remains the fallback on any failure.
 		models = executor.FetchCursorModels(ctx, a, s.cfg)
 		models = applyExcludedModels(models, excluded)
+	case "kiro":
+		// Prefer the account's dynamic model list from the Kiro API
+		// (with agentic variants); the static catalog is the fallback.
+		models = s.fetchKiroModels(ctx, a)
+		models = applyExcludedModels(models, excluded)
 	default:
 		// Handle OpenAI-compatibility providers by name using config
 		if s.cfg != nil {

@@ -37,6 +37,7 @@ type staticModelsJSON struct {
 	Meta        []*ModelInfo `json:"meta"`
 	Cline       []*ModelInfo `json:"cline"`
 	Cursor      []*ModelInfo `json:"cursor"`
+	Kiro        []*ModelInfo `json:"kiro"`
 }
 
 // GetClaudeModels returns the standard Claude model definitions.
@@ -97,6 +98,32 @@ func GetClineModels() []*ModelInfo {
 // GetCursorModels returns the standard Cursor model definitions.
 func GetCursorModels() []*ModelInfo {
 	return cloneModelInfos(getModels().Cursor)
+}
+
+// GetKiroModels returns the Kiro (AWS CodeWhisperer) model definitions,
+// excluding the amazonq-* IDs.
+func GetKiroModels() []*ModelInfo {
+	return filterKiroModels(getModels().Kiro, false)
+}
+
+// GetAmazonQModels returns the Amazon Q model definitions. These models use
+// the same API as Kiro and share the same executor.
+func GetAmazonQModels() []*ModelInfo {
+	return filterKiroModels(getModels().Kiro, true)
+}
+
+// filterKiroModels splits the combined kiro catalog by the amazonq- prefix.
+func filterKiroModels(models []*ModelInfo, amazonQ bool) []*ModelInfo {
+	var out []*ModelInfo
+	for _, model := range models {
+		if model == nil {
+			continue
+		}
+		if strings.HasPrefix(model.ID, "amazonq-") == amazonQ {
+			out = append(out, model)
+		}
+	}
+	return cloneModelInfos(out)
 }
 
 var staticDevinModels = []*ModelInfo{
@@ -494,6 +521,8 @@ func cloneModelInfos(models []*ModelInfo) []*ModelInfo {
 //   - meta
 //   - cline
 //   - cursor
+//   - kiro
+//   - amazonq
 func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 	key := strings.ToLower(strings.TrimSpace(channel))
 	switch key {
@@ -523,6 +552,10 @@ func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 		return GetClineModels()
 	case "cursor":
 		return GetCursorModels()
+	case "kiro":
+		return append(GetKiroModels(), GetAmazonQModels()...)
+	case "amazonq":
+		return GetAmazonQModels()
 	default:
 		return nil
 	}

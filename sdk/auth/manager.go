@@ -113,3 +113,22 @@ func (m *Manager) Login(ctx context.Context, provider string, cfg *config.Config
 	}
 	return record, savedPath, nil
 }
+
+// SaveAuth persists an auth record directly without going through the login
+// flow. Used by provider-specific login paths that construct the record
+// through a non-standard authenticator method (e.g. Kiro IDE import).
+func (m *Manager) SaveAuth(record *coreauth.Auth, cfg *config.Config) (string, error) {
+	if m.store == nil {
+		return "", fmt.Errorf("cliproxy auth: no store configured")
+	}
+	if record == nil {
+		return "", fmt.Errorf("cliproxy auth: cannot save nil record")
+	}
+	if cfg != nil {
+		if dirSetter, ok := m.store.(interface{ SetBaseDir(string) }); ok {
+			dirSetter.SetBaseDir(cfg.AuthDir)
+		}
+	}
+	ctx := coreauth.WithAuthCreationIntent(context.Background())
+	return m.store.Save(ctx, record)
+}

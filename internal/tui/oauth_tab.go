@@ -29,6 +29,7 @@ var oauthProviders = []oauthProvider{
 	{"Meta", "meta-auth-url", "🔵", true},
 	{"Cline", "cline-auth-url", "🟦", true},
 	{"Cursor", "cursor-auth-url", "🔲", true},
+	{"Kiro", "kiro-auth-url", "🟧", true},
 }
 
 // oauthTabModel handles OAuth login flows.

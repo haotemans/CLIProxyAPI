@@ -18,6 +18,7 @@ func init() {
 	registerRefreshLead("meta", func() Authenticator { return NewMetaAuthenticator() })
 	registerRefreshLead("cline", func() Authenticator { return NewClineAuthenticator() })
 	registerRefreshLead("cursor", func() Authenticator { return NewCursorAuthenticator() })
+	registerRefreshLead("kiro", func() Authenticator { return NewKiroAuthenticator() })
 }
 
 func registerRefreshLead(provider string, factory func() Authenticator) {

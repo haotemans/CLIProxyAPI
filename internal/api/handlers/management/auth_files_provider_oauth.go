@@ -20,6 +20,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/codex"
 	cursorauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/cursor"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/kimi"
+	kiroauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/kiro"
 	metaauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/meta"
 	xaiauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/xai"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/misc"
@@ -847,6 +848,143 @@ func (h *Handler) RequestCursorToken(c *gin.Context) {
 		"state":  state,
 		"flow":   "poll",
 	})
+}
+
+// RequestKiroToken starts the AWS SSO OIDC device flow for Kiro (AWS
+// Builder ID). The user visits the verification URL and enters the user
+// code; the server polls CreateToken until authorization completes.
+func (h *Handler) RequestKiroToken(c *gin.Context) {
+	ctx := context.Background()
+	ctx = PopulateAuthContext(ctx, c)
+
+	fmt.Println("Initializing Kiro authentication...")
+
+	ssoClient := kiroauth.NewSSOOIDCClient(h.cfg)
+
+	regResp, errRegister := ssoClient.RegisterClient(ctx)
+	if errRegister != nil {
+		log.Errorf("Failed to register Kiro client: %v", errRegister)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register Kiro client"})
+		return
+	}
+
+	authResp, errStartAuth := ssoClient.StartDeviceAuthorization(ctx, regResp.ClientID, regResp.ClientSecret)
+	if errStartAuth != nil {
+		log.Errorf("Failed to start Kiro device authorization: %v", errStartAuth)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start device authorization flow"})
+		return
+	}
+
+	authURL := strings.TrimSpace(authResp.VerificationURIComplete)
+	if authURL == "" {
+		authURL = strings.TrimSpace(authResp.VerificationURI)
+	}
+
+	state := fmt.Sprintf("kiro-%d", time.Now().UnixNano())
+	RegisterOAuthSession(state, "kiro")
+
+	go func() {
+		pollCtx, cancelPoll := context.WithCancel(ctx)
+		defer cancelPoll()
+		go watchOAuthSessionCancel(pollCtx, cancelPoll, state, "kiro")
+
+		interval := 5 * time.Second
+		if authResp.Interval > 0 {
+			interval = time.Duration(authResp.Interval) * time.Second
+		}
+		deadline := time.Now().Add(time.Duration(authResp.ExpiresIn) * time.Second)
+
+		fmt.Println("Waiting for Kiro authentication...")
+		for time.Now().Before(deadline) {
+			select {
+			case <-pollCtx.Done():
+				return
+			case <-time.After(interval):
+			}
+			tokenResp, errToken := ssoClient.CreateToken(pollCtx, regResp.ClientID, regResp.ClientSecret, authResp.DeviceCode)
+			if errToken != nil {
+				if errors.Is(errToken, kiroauth.ErrAuthorizationPending) {
+					continue
+				}
+				if errors.Is(errToken, kiroauth.ErrSlowDown) {
+					interval += 5 * time.Second
+					continue
+				}
+				if !IsOAuthSessionPending(state, "kiro") {
+					return
+				}
+				log.Errorf("Kiro token creation failed: %v", errToken)
+				SetOAuthSessionError(state, oauthSessionErrorWithCause("Token creation failed", errToken))
+				return
+			}
+
+			if !IsOAuthSessionPending(state, "kiro") {
+				return
+			}
+			if strings.TrimSpace(tokenResp.AccessToken) == "" {
+				log.Error("Kiro token creation returned empty access token")
+				SetOAuthSessionError(state, "Failed to exchange token")
+				return
+			}
+
+			expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+			email := kiroauth.ExtractEmailFromJWT(tokenResp.AccessToken)
+			idPart := kiroauth.SanitizeEmailForFilename(email)
+			if idPart == "" {
+				idPart = fmt.Sprintf("%d", time.Now().UnixNano()%100000)
+			}
+
+			now := time.Now()
+			fileName := fmt.Sprintf("kiro-aws-%s.json", idPart)
+			metadata := map[string]any{
+				"type":          "kiro",
+				"access_token":  tokenResp.AccessToken,
+				"refresh_token": tokenResp.RefreshToken,
+				"expires_at":    expiresAt.Format(time.RFC3339),
+				"auth_method":   "builder-id",
+				"provider":      "AWS",
+				"client_id":     regResp.ClientID,
+				"client_secret": regResp.ClientSecret,
+				"email":         email,
+				"last_refresh":  now.Format(time.RFC3339),
+			}
+
+			record := &coreauth.Auth{
+				ID:       fileName,
+				Provider: "kiro",
+				FileName: fileName,
+				Label:    "kiro-aws",
+				Metadata: metadata,
+			}
+			if errGuard := guardOAuthSessionPendingForSave(state, "kiro"); errGuard != nil {
+				return
+			}
+			savedPath, errSave := h.saveTokenRecord(ctx, record)
+			if errSave != nil {
+				log.Errorf("Failed to save Kiro token to file: %v", errSave)
+				SetOAuthSessionError(state, "Failed to save token to file")
+				return
+			}
+
+			CompleteOAuthSession(state)
+			fmt.Printf("Authentication successful! Token saved to %s\n", savedPath)
+			if email != "" {
+				fmt.Printf("Authenticated as: %s\n", email)
+			}
+			return
+		}
+
+		SetOAuthSessionError(state, "Authorization timed out")
+	}()
+
+	response := gin.H{"status": "ok", "url": authURL, "state": state, "flow": "device"}
+	if userCode := strings.TrimSpace(authResp.UserCode); userCode != "" {
+		response["user_code"] = userCode
+	}
+	if authResp.ExpiresIn > 0 {
+		response["expires_in"] = authResp.ExpiresIn
+	}
+	c.JSON(200, response)
 }
 
 func (h *Handler) RequestMetaToken(c *gin.Context) {

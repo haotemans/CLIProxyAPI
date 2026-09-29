@@ -23,6 +23,7 @@ import styles from './OAuthPage.module.scss';
 import iconMeta from '@/assets/icons/meta.svg';
 import iconCline from '@/assets/icons/cline.svg';
 import iconCursor from '@/assets/icons/cursor.svg';
+import iconKiro from '@/assets/icons/kiro.svg';
 import iconCodex from '@/assets/icons/codex.svg';
 import iconClaude from '@/assets/icons/claude.svg';
 import iconAntigravity from '@/assets/icons/antigravity.svg';
@@ -146,6 +147,12 @@ const PROVIDERS: BuiltInOAuthProviderCard[] = [
     id: 'cursor',
     titleKey: 'auth_login.cursor_oauth_title',
     icon: iconCursor,
+  },
+  {
+    kind: 'builtin',
+    id: 'kiro',
+    titleKey: 'auth_login.kiro_oauth_title',
+    icon: iconKiro,
   },
 ];
 

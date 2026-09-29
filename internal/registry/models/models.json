@@ -5064,5 +5064,625 @@
         "text"
       ]
     }
+  ],
+  "kiro": [
+    {
+      "id": "kiro-auto",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Auto",
+      "description": "Automatic model selection by Kiro",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-opus-4-6",
+      "object": "model",
+      "created": 1736899200,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Opus 4.6",
+      "description": "Claude Opus 4.6 via Kiro (2.2x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-sonnet-4-6",
+      "object": "model",
+      "created": 1739836800,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Sonnet 4.6",
+      "description": "Claude Sonnet 4.6 via Kiro (1.3x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-opus-4-5",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Opus 4.5",
+      "description": "Claude Opus 4.5 via Kiro (2.2x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-sonnet-4-5",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Sonnet 4.5",
+      "description": "Claude Sonnet 4.5 via Kiro (1.3x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-sonnet-4",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Sonnet 4",
+      "description": "Claude Sonnet 4 via Kiro (1.3x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-haiku-4-5",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Haiku 4.5",
+      "description": "Claude Haiku 4.5 via Kiro (0.4x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-deepseek-3-2",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro DeepSeek 3.2",
+      "description": "DeepSeek 3.2 via Kiro",
+      "context_length": 128000,
+      "max_completion_tokens": 32768,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-minimax-m2-1",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro MiniMax M2.1",
+      "description": "MiniMax M2.1 via Kiro",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-qwen3-coder-next",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Qwen3 Coder Next",
+      "description": "Qwen3 Coder Next via Kiro",
+      "context_length": 128000,
+      "max_completion_tokens": 32768,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-gpt-4o",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro GPT-4o",
+      "description": "OpenAI GPT-4o via Kiro",
+      "context_length": 128000,
+      "max_completion_tokens": 16384,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-gpt-4",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro GPT-4",
+      "description": "OpenAI GPT-4 via Kiro",
+      "context_length": 128000,
+      "max_completion_tokens": 8192,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-gpt-4-turbo",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro GPT-4 Turbo",
+      "description": "OpenAI GPT-4 Turbo via Kiro",
+      "context_length": 128000,
+      "max_completion_tokens": 16384,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-gpt-3-5-turbo",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro GPT-3.5 Turbo",
+      "description": "OpenAI GPT-3.5 Turbo via Kiro",
+      "context_length": 16384,
+      "max_completion_tokens": 4096,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-opus-4-6-agentic",
+      "object": "model",
+      "created": 1736899200,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Opus 4.6 (Agentic)",
+      "description": "Claude Opus 4.6 optimized for coding agents (chunked writes)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-sonnet-4-6-agentic",
+      "object": "model",
+      "created": 1739836800,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Sonnet 4.6 (Agentic)",
+      "description": "Claude Sonnet 4.6 optimized for coding agents (chunked writes)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-opus-4-5-agentic",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Opus 4.5 (Agentic)",
+      "description": "Claude Opus 4.5 optimized for coding agents (chunked writes)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-sonnet-4-5-agentic",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Sonnet 4.5 (Agentic)",
+      "description": "Claude Sonnet 4.5 optimized for coding agents (chunked writes)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-sonnet-4-agentic",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Sonnet 4 (Agentic)",
+      "description": "Claude Sonnet 4 optimized for coding agents (chunked writes)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-claude-haiku-4-5-agentic",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Claude Haiku 4.5 (Agentic)",
+      "description": "Claude Haiku 4.5 optimized for coding agents (chunked writes)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-deepseek-3-2-agentic",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro DeepSeek 3.2 (Agentic)",
+      "description": "DeepSeek 3.2 optimized for coding agents (chunked writes)",
+      "context_length": 128000,
+      "max_completion_tokens": 32768,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-minimax-m2-1-agentic",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro MiniMax M2.1 (Agentic)",
+      "description": "MiniMax M2.1 optimized for coding agents (chunked writes)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "kiro-qwen3-coder-next-agentic",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Kiro Qwen3 Coder Next (Agentic)",
+      "description": "Qwen3 Coder Next optimized for coding agents (chunked writes)",
+      "context_length": 128000,
+      "max_completion_tokens": 32768,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "amazonq-auto",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Amazon Q Auto",
+      "description": "Automatic model selection by Amazon Q",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "amazonq-claude-opus-4.5",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Amazon Q Claude Opus 4.5",
+      "description": "Claude Opus 4.5 via Amazon Q (2.2x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "amazonq-claude-sonnet-4.5",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Amazon Q Claude Sonnet 4.5",
+      "description": "Claude Sonnet 4.5 via Amazon Q (1.3x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "amazonq-claude-sonnet-4",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Amazon Q Claude Sonnet 4",
+      "description": "Claude Sonnet 4 via Amazon Q (1.3x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "amazonq-claude-haiku-4.5",
+      "object": "model",
+      "created": 1732752000,
+      "owned_by": "aws",
+      "type": "kiro",
+      "display_name": "Amazon Q Claude Haiku 4.5",
+      "description": "Claude Haiku 4.5 via Amazon Q (0.4x credit)",
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    }
   ]
 }

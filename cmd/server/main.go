@@ -117,6 +117,14 @@ func main() {
 	var metaLogin bool
 	var clineLogin bool
 	var cursorLogin bool
+	var kiroLogin bool
+	var kiroAWSLogin bool
+	var kiroAWSAuthCode bool
+	var kiroImport bool
+	var kiroIDCLogin bool
+	var kiroIDCStartURL string
+	var kiroIDCRegion string
+	var kiroIDCFlow string
 	var discoverGateways bool
 	var discoverTimeout int
 	var discoverJSON bool
@@ -148,6 +156,14 @@ func main() {
 	flag.BoolVar(&metaLogin, "meta-login", false, "Login to Meta using OAuth")
 	flag.BoolVar(&clineLogin, "cline-login", false, "Login to Cline using OAuth")
 	flag.BoolVar(&cursorLogin, "cursor-login", false, "Login to Cursor using OAuth")
+	flag.BoolVar(&kiroLogin, "kiro-login", false, "Login to Kiro using AWS Builder ID (device code flow)")
+	flag.BoolVar(&kiroAWSLogin, "kiro-aws-login", false, "Login to Kiro using AWS Builder ID (device code flow)")
+	flag.BoolVar(&kiroAWSAuthCode, "kiro-aws-authcode", false, "Login to Kiro using AWS Builder ID (authorization code flow, better UX)")
+	flag.BoolVar(&kiroImport, "kiro-import", false, "Import Kiro token from Kiro IDE (~/.aws/sso/cache/kiro-auth-token.json)")
+	flag.BoolVar(&kiroIDCLogin, "kiro-idc-login", false, "Login to Kiro using IAM Identity Center (IDC)")
+	flag.StringVar(&kiroIDCStartURL, "kiro-idc-start-url", "", "IDC start URL (required with --kiro-idc-login)")
+	flag.StringVar(&kiroIDCRegion, "kiro-idc-region", "", "IDC region (default: us-east-1)")
+	flag.StringVar(&kiroIDCFlow, "kiro-idc-flow", "", "IDC flow type: authcode (default) or device")
 	flag.BoolVar(&discoverGateways, "discover", false, "Discover local AI gateways and CPA instances on the LAN")
 	flag.IntVar(&discoverTimeout, "discover-timeout", 3, "Timeout in seconds for LAN discovery (default 3s)")
 	flag.BoolVar(&discoverJSON, "discover-json", false, "Output discovered gateways in JSON format")
@@ -658,7 +674,7 @@ func main() {
 		CallbackPort: oauthCallbackPort,
 	}
 
-	commandMode := vertexImport != "" || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || kimiAILogin || xaiLogin || devinLogin || metaLogin || clineLogin || cursorLogin
+	commandMode := vertexImport != "" || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || kimiAILogin || xaiLogin || devinLogin || metaLogin || clineLogin || cursorLogin || kiroLogin || kiroAWSLogin || kiroAWSAuthCode || kiroImport || kiroIDCLogin
 	cloudConfigMissing := isCloudDeploy && !configFileExists
 	homeMode := configLoadedFromHome || (cfg != nil && cfg.Home.Enabled)
 	exampleAPIKeySafeMode := shouldEnableExampleAPIKeySafeMode(cfg, commandMode, tuiMode, standalone, cloudConfigMissing, homeMode)
@@ -742,6 +758,16 @@ func main() {
 		cmd.DoClineLogin(cfg, options)
 	} else if cursorLogin {
 		cmd.DoCursorLogin(cfg, options)
+	} else if kiroLogin {
+		cmd.DoKiroLogin(cfg, options)
+	} else if kiroAWSLogin {
+		cmd.DoKiroAWSLogin(cfg, options)
+	} else if kiroAWSAuthCode {
+		cmd.DoKiroAWSAuthCodeLogin(cfg, options)
+	} else if kiroImport {
+		cmd.DoKiroImport(cfg, options)
+	} else if kiroIDCLogin {
+		cmd.DoKiroIDCLogin(cfg, options, kiroIDCStartURL, kiroIDCRegion, kiroIDCFlow)
 	} else {
 		// In cloud deploy mode without config file, just wait for shutdown signals
 		if isCloudDeploy && !configFileExists {
@@ -977,6 +1003,7 @@ func argvFlagConsumesValue(name string) bool {
 	switch name {
 	case "codex-login", "codex-device-login", "claude-login", "no-browser",
 		"antigravity-login", "kimi-login", "kimi-ai-login", "xai-login", "devin-login", "meta-login", "cline-login", "cursor-login",
+		"kiro-login", "kiro-aws-login", "kiro-aws-authcode", "kiro-import", "kiro-idc-login",
 		"discover", "discover-json", "home-disable-cluster-discovery",
 		"tui", "standalone", "local-model":
 		return false
