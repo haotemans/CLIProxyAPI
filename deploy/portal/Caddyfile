@@ -1,0 +1,6 @@
+# CPA components portal — serves deploy/portal/index.html on port 80.
+# On the server: /etc/caddy.Caddyfile with root at /root/portal.
+:80 {
+	root * /root/portal
+	file_server
+}

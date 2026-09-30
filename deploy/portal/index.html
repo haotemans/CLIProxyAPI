@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLIProxyAPI 服务门户</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #0f1115; color: #e6e8eb; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center; padding: 32px 16px;
+  }
+  main { width: 100%; max-width: 960px; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .sub { color: #8b919c; font-size: 13px; margin-bottom: 28px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
+  a.card {
+    display: block; text-decoration: none; color: inherit;
+    background: #181b22; border: 1px solid #262b36; border-radius: 14px; padding: 20px;
+    transition: border-color .15s, transform .15s;
+  }
+  a.card:hover { border-color: #4f8cff; transform: translateY(-2px); }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .name { font-size: 16px; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; transition: background .3s; }
+  .dot.ok { background: #3fce6d; box-shadow: 0 0 8px #3fce6d88; }
+  .dot.bad { background: #e5534b; }
+  .desc { font-size: 13px; color: #9aa1ac; line-height: 1.5; margin-bottom: 14px; }
+  .url { font-size: 12px; color: #5f6b7d; font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+  footer { margin-top: 26px; font-size: 12px; color: #5f6b7d; }
+  code { background: #1d212a; padding: 1px 6px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CLIProxyAPI 服务门户</h1>
+  <p class="sub">三个 CPA 组件的统一入口 · new-api 与代理(xray)为独立服务，不在此列</p>
+  <div class="grid" id="grid"></div>
+  <footer>凭据统一：管理面板密码与 Keeper 登录密码、Manager 管理密钥为同一套（见部署笔记）。</footer>
+</main>
+<script>
+const HOST = location.hostname;
+const services = [
+  {
+    name: "CPAMC 管理控制台",
+    desc: "CLIProxyAPI 主控：OAuth 登录、凭证池、提供商、插件商店、用量队列（已内嵌 Usage Keeper 入口）",
+    url: "http://" + HOST + ":8317/management.html",
+    health: "http://" + HOST + ":8317/management.html"
+  },
+  {
+    name: "CPA Usage Keeper",
+    desc: "用量持久化与分析仪表盘：请求级统计、模型/账号维度聚合、长期趋势",
+    url: "http://" + HOST + ":8080/",
+    health: "http://" + HOST + ":8080/healthz"
+  },
+  {
+    name: "CPA Manager Plus",
+    desc: "深度运维中心：请求历史、成本估算（LiteLLM 价格同步）、Codex 账号池巡检与清理",
+    url: "http://" + HOST + ":18317/management.html",
+    health: "http://" + HOST + ":18317/health"
+  }
+];
+const grid = document.getElementById("grid");
+for (const s of services) {
+  const a = document.createElement("a");
+  a.className = "card"; a.href = s.url; a.target = "_blank"; a.rel = "noopener";
+  a.innerHTML = `<div class="top"><span class="name">${s.name}</span><span class="dot" id="d-${s.name.length}"></span></div>
+    <p class="desc">${s.desc}</p><p class="url">${s.url}</p>`;
+  grid.appendChild(a);
+  const dot = a.querySelector(".dot");
+  fetch(s.health, { mode: "no-cors", cache: "no-store" })
+    .then(() => dot.classList.add("ok"))
+    .catch(() => dot.classList.add("bad"));
+}
+</script>
+</body>
+</html>
