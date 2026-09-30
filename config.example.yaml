@@ -775,6 +775,28 @@ requests:
 
 # END API KEY EXAMPLES
 
+# Unified application: run cpa-usage-keeper and cpa-manager-plus embedded in
+# this process on loopback listeners, reverse-proxied behind the main server.
+#   /keeper/*  -> keeper at 127.0.0.1:18080 (paths preserved, keeper mounts APP_BASE_PATH)
+#   /manager/* -> manager backend at 127.0.0.1:18317 (prefix stripped; backend API only,
+#                 the CPAMP SPA has no base-path support, use standalone manager for its UI)
+# Default: disabled. Changing this section requires a restart (hot reload does not apply).
+# NOTE: keeper embeds only into CGO builds (mattn/go-sqlite3). In a CGO_ENABLED=0
+# build the keeper sidecar reports a startup error and the rest of CPA keeps serving.
+# unified:
+#   enabled: false              # master switch
+#   management-key: ""          # plaintext key the sidecars use against CPA's management API;
+#                               # falls back to a plaintext remote-management.secret-key
+#   keeper:
+#     enabled: false
+#     data-dir: "/root/cpa-usage-keeper/data"   # sqlite, logs, backups
+#     login-password: ""                        # required: keeper UI/admin password (sidecar fails without it)
+#   manager:
+#     enabled: false
+#     data-dir: "/root/cpa-manager-plus/data"   # usage sqlite, archives, data key
+#     admin-key: ""                             # optional; manager generates one on first run when empty
+#     collector-mode: "auto"                    # auto | http | resp | subscribe
+
 # OAuth/file-backed credentials. Token material stays in the credential store.
 oauth:
   # Authentication directory (supports ~ for home directory)
