@@ -40,19 +40,25 @@ func (r credentialQuotaRequest) resolveAuthIndex() string {
 }
 
 // GetQuotaProviders returns the list of registered quota providers.
+// Builtin native quota fetchers (kiro, mirasim) are merged into the list.
 func (h *Handler) GetQuotaProviders(c *gin.Context) {
+	providers := make([]any, 0, len(nativeQuotaProviders))
+	for _, provider := range nativeQuotaProviders {
+		providers = append(providers, provider)
+	}
 	if h == nil {
-		c.JSON(http.StatusOK, gin.H{"providers": []any{}})
+		c.JSON(http.StatusOK, gin.H{"providers": providers})
 		return
 	}
 	h.mu.Lock()
 	host := h.pluginHost
 	h.mu.Unlock()
-	if host == nil {
-		c.JSON(http.StatusOK, gin.H{"providers": []any{}})
-		return
+	if host != nil {
+		for _, provider := range host.QuotaProviders(c.Request.Context()) {
+			providers = append(providers, provider)
+		}
 	}
-	c.JSON(http.StatusOK, gin.H{"providers": host.QuotaProviders(c.Request.Context())})
+	c.JSON(http.StatusOK, gin.H{"providers": providers})
 }
 
 // FetchCredentialQuota retrieves normalized quota for a credential via its quota provider or declarative probe.
@@ -109,6 +115,17 @@ func (h *Handler) FetchCredentialQuota(c *gin.Context) {
 			c.JSON(http.StatusOK, quotaResp)
 			return
 		}
+	}
+
+	// Native builtin quota fetchers (kiro, mirasim) run ahead of probes.
+	if quotaResp, handledNative, errNative := h.tryNativeQuotaFetch(c.Request.Context(), auth); handledNative {
+		if errNative != nil {
+			log.WithError(errNative).Warnf("failed to fetch native quota for credential %s", auth.Index)
+			c.JSON(http.StatusBadGateway, gin.H{"error": errNative.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, quotaResp)
+		return
 	}
 
 	// Fallback to declarative quota probe if configured in metadata

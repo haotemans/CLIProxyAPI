@@ -14,9 +14,11 @@ const (
 
 // ProviderSupportsQuotaObservation reports whether the named provider emits a
 // passive credential-level quota snapshot understood by collectQuotaSignals.
+// kiro and mirasim have native fetched quota (management tryNativeQuotaFetch);
+// accepting them here lets their observation payload pass through unchanged.
 func ProviderSupportsQuotaObservation(provider string) bool {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "claude", "codex", "devin":
+	case "claude", "codex", "devin", "kiro", "mirasim":
 		return true
 	default:
 		return false
