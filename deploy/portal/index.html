@@ -51,13 +51,13 @@ const services = [
   },
   {
     name: "CPA Usage Keeper",
-    desc: "用量持久化与分析仪表盘：请求级统计、模型/账号维度聚合、长期趋势",
-    url: "http://" + HOST + ":8080/",
-    health: "http://" + HOST + ":8080/healthz"
+    desc: "用量持久化与分析仪表盘（已内嵌进 cli-proxy-api 进程，统一从 8317 访问）：请求级统计、模型/账号维度聚合、长期趋势",
+    url: "http://" + HOST + ":8317/keeper/",
+    health: "http://" + HOST + ":8317/keeper/healthz"
   },
   {
     name: "CPA Manager Plus",
-    desc: "深度运维中心：请求历史、成本估算（LiteLLM 价格同步）、Codex 账号池巡检与清理",
+    desc: "深度运维中心（同进程内嵌，面板保留原端口）：请求历史、成本估算（LiteLLM 价格同步）、Codex 账号池巡检与清理",
     url: "http://" + HOST + ":18317/management.html",
     health: "http://" + HOST + ":18317/health"
   }
