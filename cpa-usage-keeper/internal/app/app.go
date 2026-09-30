@@ -455,12 +455,51 @@ func (a *App) Close() error {
 }
 
 func (a *App) Run() error {
+	return a.RunWithContext(context.Background())
+}
+
+// RunWithContext starts the background runners and the HTTP server, shutting
+// both down when ctx is cancelled. It returns nil when the server stopped due
+// to ctx cancellation.
+func (a *App) RunWithContext(ctx context.Context) error {
 	if a == nil || a.Router == nil || a.Config == nil {
 		return fmt.Errorf("application is not initialized")
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	ctx := a.startBackgroundContext()
+	backgroundCtx := a.startBackgroundContext()
 	defer a.stopBackgroundTasks()
+	a.startRunners(backgroundCtx)
+
+	server := NewHTTPServer(*a.Config, a.Router)
+	errCh := make(chan error, 1)
+	go func() {
+		if a.Config.TLSEnabled {
+			errCh <- server.ListenAndServeTLS(a.Config.TLSCertFile, a.Config.TLSKeyFile)
+		} else {
+			errCh <- server.ListenAndServe()
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), httpShutdownTimeout)
+		defer cancelShutdown()
+		if errShutdown := server.Shutdown(shutdownCtx); errShutdown != nil {
+			logrus.WithError(errShutdown).Error("shut down http server")
+		}
+		<-errCh
+		return nil
+	}
+}
+
+// startRunners launches every background runner on the provided context;
+// each runner failure only terminates that task, never the HTTP server.
+func (a *App) startRunners(ctx context.Context) {
 	if a.RedisIngest != nil {
 		a.startBackgroundTask(func() {
 			if err := a.RedisIngest.Run(ctx); err != nil {
@@ -540,13 +579,9 @@ func (a *App) Run() error {
 			}
 		})
 	}
-
-	server := NewHTTPServer(*a.Config, a.Router)
-	if a.Config.TLSEnabled {
-		return server.ListenAndServeTLS(a.Config.TLSCertFile, a.Config.TLSKeyFile)
-	}
-	return server.ListenAndServe()
 }
+
+const httpShutdownTimeout = 10 * time.Second
 
 func (a *App) startBackgroundContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
