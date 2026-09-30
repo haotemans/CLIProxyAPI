@@ -1,12 +1,34 @@
 import type { PluginListEntry } from '@/types';
 import { getPluginTitle, resolvePluginAssetURL } from '@/features/plugins/pluginResources';
+import iconMirasim from '@/assets/icons/mirasim.svg';
 
 export interface PluginOAuthProviderCard {
   kind: 'plugin';
   id: string;
   title: string;
   icon: string;
+  /** Optional i18n key overriding the generic plugin title composition. */
+  titleKey?: string;
+  /** Optional i18n key overriding the generic plugin hint text. */
+  hintKey?: string;
 }
+
+/**
+ * Presentation-only brand overrides for known plugin OAuth providers, keyed by
+ * `oauth_provider`. They make the dynamic cards look native (title, icon,
+ * hint) without touching the start flow, dedupe or provider-key logic.
+ * Unknown plugin providers keep the generic rendering.
+ */
+export const PLUGIN_OAUTH_BRAND_OVERRIDES: Record<
+  string,
+  { titleKey: string; hintKey: string; icon: string }
+> = {
+  mirasim: {
+    titleKey: 'auth_login.mirasim_oauth_title',
+    hintKey: 'auth_login.mirasim_oauth_hint',
+    icon: iconMirasim,
+  },
+};
 
 /**
  * Build OAuth cards for plugin-provided providers. An entry participates when
@@ -32,12 +54,14 @@ export const buildPluginOAuthProviderCards = (
       return [];
     }
     seenProviders.add(provider);
+    const brand = PLUGIN_OAUTH_BRAND_OVERRIDES[provider];
     return [
       {
         kind: 'plugin' as const,
         id: provider,
         title: getPluginTitle(plugin),
-        icon: resolvePluginAssetURL(plugin.logo || plugin.metadata?.logo || '', apiBase),
+        icon: brand?.icon || resolvePluginAssetURL(plugin.logo || plugin.metadata?.logo || '', apiBase),
+        ...(brand ? { titleKey: brand.titleKey, hintKey: brand.hintKey } : {}),
       },
     ];
   });

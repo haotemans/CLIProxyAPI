@@ -2,6 +2,7 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import {
   buildPluginOAuthProviderCards,
+  PLUGIN_OAUTH_BRAND_OVERRIDES,
   resolveAuthStartUrl,
 } from '@/pages/oauthPluginProviders';
 import { oauthApi, pluginsApi, type BuiltInOAuthProvider } from '@/services/api';
@@ -83,6 +84,54 @@ describe('plugin OAuth provider cards', () => {
     );
     expect(cards).toHaveLength(1);
     expect(cards[0].title).toBe('mirasim');
+  });
+
+  test('mirasim gets the native brand override (title key, hint key, icon)', () => {
+    const cards = buildPluginOAuthProviderCards(
+      [pluginEntry({ metadata: { name: 'Mirasim Provider' } as PluginListEntry['metadata'] })],
+      '',
+      BUILTIN_IDS
+    );
+    expect(cards).toHaveLength(1);
+    const [card] = cards;
+    expect(PLUGIN_OAUTH_BRAND_OVERRIDES.mirasim.icon).toBeTruthy();
+    expect(card.titleKey).toBe('auth_login.mirasim_oauth_title');
+    expect(card.hintKey).toBe('auth_login.mirasim_oauth_hint');
+    // The brand icon wins over the plugin logo.
+    expect(card.icon).toBe(PLUGIN_OAUTH_BRAND_OVERRIDES.mirasim.icon);
+    expect(readFileSync('src/assets/icons/mirasim.svg', 'utf8')).toContain('<svg');
+  });
+
+  test('unknown plugin providers keep the generic rendering', () => {
+    const cards = buildPluginOAuthProviderCards(
+      [pluginEntry({ oauthProvider: 'custom-sso' })],
+      '',
+      BUILTIN_IDS
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0].titleKey).toBeUndefined();
+    expect(cards[0].hintKey).toBeUndefined();
+  });
+
+  test('overrides are presentation-only: dedupe still uses oauth_provider', () => {
+    const cards = buildPluginOAuthProviderCards(
+      [
+        pluginEntry({ id: 'first', oauthProvider: 'mirasim', metadata: null }),
+        pluginEntry({ id: 'second', oauthProvider: 'mirasim', metadata: null }),
+      ],
+      '',
+      BUILTIN_IDS
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0].id).toBe('mirasim');
+  });
+
+  test('mirasim override locale keys exist in every locale', () => {
+    for (const locale of ['en', 'zh-CN', 'zh-TW', 'ru']) {
+      const translations = JSON.parse(readFileSync(`src/i18n/locales/${locale}.json`, 'utf8'));
+      expect(translations.auth_login.mirasim_oauth_title).toBe('Mirasim OAuth');
+      expect(translations.auth_login.mirasim_oauth_hint).toBeTruthy();
+    }
   });
 
   test('OAuth page merges the lists with static cards first', () => {

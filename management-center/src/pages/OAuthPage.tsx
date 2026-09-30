@@ -332,13 +332,20 @@ export function OAuthPage() {
 
   const getProviderTitleText = (provider: OAuthProviderCard) =>
     provider.kind === 'plugin'
-      ? t('auth_login.plugin_oauth_title', { name: provider.title })
+      ? provider.titleKey
+        ? t(provider.titleKey)
+        : t('auth_login.plugin_oauth_title', { name: provider.title })
       : t(provider.titleKey);
 
-  const getProviderText = (provider: OAuthProviderCard, suffix: string) =>
-    provider.kind === 'plugin'
-      ? t(`auth_login.plugin_${suffix}`, { name: provider.title })
-      : t(getAuthKey(provider.id, suffix));
+  const getProviderText = (provider: OAuthProviderCard, suffix: string) => {
+    if (provider.kind === 'plugin') {
+      if (suffix === 'oauth_hint' && provider.hintKey) {
+        return t(provider.hintKey);
+      }
+      return t(`auth_login.plugin_${suffix}`, { name: provider.title });
+    }
+    return t(getAuthKey(provider.id, suffix));
+  };
 
   const getProviderTextByID = (provider: string, suffix: string) => {
     const card = providerCards.find((item) => item.id === provider);

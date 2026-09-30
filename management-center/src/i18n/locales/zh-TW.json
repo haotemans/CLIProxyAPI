@@ -887,6 +887,8 @@
     "plugin_oauth_status_error": "驗證失敗:",
     "plugin_oauth_start_error": "啟動插件 OAuth 失敗:",
     "plugin_oauth_polling_error": "檢查插件 OAuth 狀態失敗:",
+    "mirasim_oauth_title": "Mirasim OAuth",
+    "mirasim_oauth_hint": "開啟授權連結並登入 Mirasim 帳號。授權完成後自動取得並儲存認證檔案。",
     "xai_callback_label": "回調 URL 或授權碼",
     "xai_callback_placeholder": "貼上頁面顯示的 code，或完整 callback URL",
     "xai_callback_hint": "Grok 有時只在頁面顯示 code。可直接貼上 code，系統會自動拼接為 http://127.0.0.1:56121/callback?... 後提交。",
