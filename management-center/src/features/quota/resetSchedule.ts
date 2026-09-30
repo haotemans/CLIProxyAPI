@@ -129,6 +129,11 @@ export function collectQuotaRowInstants(
     return collectRows((quota as { rows?: WindowLike[] }).rows ?? [], 'row');
   }
 
+  if (provider === 'kiro' || provider === 'mirasim') {
+    // Native builtin lanes share Kimi's generic meter-row shape.
+    return collectRows((quota as { rows?: WindowLike[] }).rows ?? [], 'row');
+  }
+
   if (provider === 'meta') {
     const windows =
       (

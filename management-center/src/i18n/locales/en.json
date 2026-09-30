@@ -106,7 +106,8 @@
     "plugin_store": "Plugin Store",
     "config_management": "Config Panel",
     "logs": "Logs Viewer",
-    "system_info": "Management Center Info"
+    "system_info": "Management Center Info",
+    "usage_stats": "Usage statistics"
   },
   "nav_groups": {
     "operate": "Operate",
@@ -126,7 +127,8 @@
     "plugin_store": "Discover & install plugins",
     "logs": "Request tracing",
     "config_management": "Gateway configuration",
-    "system_info": "Runtime & diagnostics"
+    "system_info": "Runtime & diagnostics",
+    "usage_stats": "Tokens & cost analytics"
   },
   "dashboard": {
     "hero_verdict_good": "All systems steady",
@@ -1915,5 +1917,47 @@
     "modelCatalog": {
       "notLoaded": "Not loaded"
     }
+  },
+  "usage_stats": {
+    "title": "Usage statistics",
+    "refresh": "Refresh",
+    "range_24h": "24h",
+    "range_7d": "7d",
+    "range_30d": "30d",
+    "range_custom": "Custom",
+    "custom_from": "Start",
+    "custom_to": "End",
+    "disabled_hint": "Usage statistics are disabled for this server (usage-stats.enabled: false in config.yaml); no events have been recorded.",
+    "card_requests": "Requests",
+    "card_tokens_hint": "{{count}} tokens total",
+    "card_input": "Input tokens",
+    "card_output": "Output tokens",
+    "card_cost": "Cost (USD)",
+    "cost_split": "{{upstream}} upstream-reported · {{computed}} computed",
+    "chart_title": "Daily cost by provider (selected currency window)",
+    "empty_chart": "No activity in range",
+    "table_title": "Breakdown",
+    "group_provider": "By provider",
+    "group_model": "By model",
+    "group_auth_file": "By credential",
+    "col_key": "Key",
+    "col_requests": "Requests",
+    "col_input": "Input",
+    "col_output": "Output",
+    "col_cost": "Cost",
+    "empty_title": "No usage recorded yet",
+    "empty_description": "Completed requests show up here once usage statistics have been written (config section usage-stats)."
+  },
+  "kiro_quota": {
+    "plan": "Plan",
+    "empty_data": "No quota data yet. Request a token refresh first.",
+    "missing_auth_index": "Credential index is missing.",
+    "request_failed": "Failed to fetch Kiro quota (status {{status}})."
+  },
+  "mirasim_quota": {
+    "plan": "Plan",
+    "empty_data": "No quota data yet.",
+    "missing_auth_index": "Credential index is missing.",
+    "request_failed": "Failed to fetch Mirasim quota (status {{status}})."
   }
 }

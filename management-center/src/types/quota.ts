@@ -356,6 +356,19 @@ export interface KimiQuotaState {
   errorStatus?: number;
 }
 
+/**
+ * Shared state for native builtin quota lanes (kiro, mirasim): the backend's
+ * /v0/management/quota/fetch response is reduced to an optional plan label
+ * and generic meter rows driven by remaining fractions.
+ */
+export interface NativeQuotaState {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  plan?: string;
+  rows: KimiQuotaRow[];
+  error?: string;
+  errorStatus?: number;
+}
+
 // xAI/Grok API payload types
 export interface XaiBillingCent {
   val?: number | string;

@@ -106,7 +106,8 @@
     "plugin_store": "Магазин плагинов",
     "config_management": "Панель конфигурации",
     "logs": "Просмотр логов",
-    "system_info": "Информация системы"
+    "system_info": "Информация системы",
+    "usage_stats": "Статистика использования"
   },
   "nav_groups": {
     "operate": "Работа",
@@ -125,7 +126,8 @@
     "plugin_store": "Поиск и установка плагинов",
     "logs": "Трассировка запросов",
     "config_management": "Базовая конфигурация шлюза",
-    "system_info": "Состояние и диагностика"
+    "system_info": "Состояние и диагностика",
+    "usage_stats": "Статистика по токенам и стоимости"
   },
   "dashboard": {
     "hero_verdict_good": "Всё стабильно",
@@ -1909,5 +1911,47 @@
     "modelCatalog": {
       "notLoaded": "Не загружено"
     }
+  },
+  "usage_stats": {
+    "title": "Статистика использования",
+    "refresh": "Обновить",
+    "range_24h": "24 ч",
+    "range_7d": "7 дн.",
+    "range_30d": "30 дн.",
+    "range_custom": "Период",
+    "custom_from": "Начало",
+    "custom_to": "Конец",
+    "disabled_hint": "Статистика использования на этом сервере отключена (usage-stats.enabled: false в config.yaml); события не записываются.",
+    "card_requests": "Запросы",
+    "card_tokens_hint": "Всего {{count}} токенов",
+    "card_input": "Входные токены",
+    "card_output": "Выходные токены",
+    "card_cost": "Стоимость (USD)",
+    "cost_split": "По отчетам upstream {{upstream}} · расчетно {{computed}}",
+    "chart_title": "Стоимость по дням и провайдерам (выбранный период)",
+    "empty_chart": "Нет активности за период",
+    "table_title": "Детализация",
+    "group_provider": "По провайдеру",
+    "group_model": "По модели",
+    "group_auth_file": "По учетным данным",
+    "col_key": "Ключ",
+    "col_requests": "Запросы",
+    "col_input": "Ввод",
+    "col_output": "Вывод",
+    "col_cost": "Цена",
+    "empty_title": "Использование пока не записано",
+    "empty_description": "После записи завершенных запросов статистика появится здесь (раздел usage-stats в config.yaml)."
+  },
+  "kiro_quota": {
+    "plan": "Тариф",
+    "empty_data": "Данные о квотах пока отсутствуют.",
+    "missing_auth_index": "Отсутствует индекс учетных данных.",
+    "request_failed": "Не удалось получить квоту Kiro (статус {{status}})."
+  },
+  "mirasim_quota": {
+    "plan": "Тариф",
+    "empty_data": "Данные о квотах пока отсутствуют.",
+    "missing_auth_index": "Отсутствует индекс учетных данных.",
+    "request_failed": "Не удалось получить квоту Mirasim (статус {{status}})."
   }
 }

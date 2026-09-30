@@ -106,7 +106,8 @@
     "plugin_store": "插件商店",
     "config_management": "配置面板",
     "logs": "日志查看",
-    "system_info": "中心信息"
+    "system_info": "中心信息",
+    "usage_stats": "用量统计"
   },
   "nav_groups": {
     "operate": "运行",
@@ -126,7 +127,8 @@
     "plugin_store": "发现并安装插件",
     "logs": "请求追踪与排查",
     "config_management": "网关基础配置",
-    "system_info": "运行与诊断信息"
+    "system_info": "运行与诊断信息",
+    "usage_stats": "Tokens 与费用统计"
   },
   "dashboard": {
     "hero_verdict_good": "运行平稳",
@@ -1913,5 +1915,47 @@
     "modelCatalog": {
       "notLoaded": "未加载"
     }
+  },
+  "usage_stats": {
+    "title": "用量统计",
+    "refresh": "刷新",
+    "range_24h": "24 小时",
+    "range_7d": "7 天",
+    "range_30d": "30 天",
+    "range_custom": "自定义",
+    "custom_from": "开始",
+    "custom_to": "结束",
+    "disabled_hint": "该服务器的用量统计已禁用(config.yaml 中 usage-stats.enabled: false),未记录任何事件。",
+    "card_requests": "请求数",
+    "card_tokens_hint": "共 {{count}} tokens",
+    "card_input": "输入 tokens",
+    "card_output": "输出 tokens",
+    "card_cost": "花费 (USD)",
+    "cost_split": "上游上报 {{upstream}} · 估算 {{computed}}",
+    "chart_title": "按提供商的每日花费(所选时间窗口)",
+    "empty_chart": "该范围内暂无活动",
+    "table_title": "明细",
+    "group_provider": "按提供商",
+    "group_model": "按模型",
+    "group_auth_file": "按凭证",
+    "col_key": "项",
+    "col_requests": "请求数",
+    "col_input": "输入",
+    "col_output": "输出",
+    "col_cost": "花费",
+    "empty_title": "尚无用量记录",
+    "empty_description": "完成请求并落库后,用量统计会显示在这里(config.yaml 的 usage-stats 部分)。"
+  },
+  "kiro_quota": {
+    "plan": "套餐",
+    "empty_data": "暂无额度数据。",
+    "missing_auth_index": "缺少凭证索引。",
+    "request_failed": "获取 Kiro 额度失败(状态 {{status}})。"
+  },
+  "mirasim_quota": {
+    "plan": "套餐",
+    "empty_data": "暂无额度数据。",
+    "missing_auth_index": "缺少凭证索引。",
+    "request_failed": "获取 Mirasim 额度失败(状态 {{status}})。"
   }
 }

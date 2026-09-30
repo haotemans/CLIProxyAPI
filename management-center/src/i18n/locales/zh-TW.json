@@ -106,7 +106,8 @@
     "plugin_store": "插件商店",
     "config_management": "設定面板",
     "logs": "記錄檢視",
-    "system_info": "中心資訊"
+    "system_info": "中心資訊",
+    "usage_stats": "用量統計"
   },
   "nav_groups": {
     "operate": "運行",
@@ -126,7 +127,8 @@
     "plugin_store": "探索並安裝插件",
     "logs": "請求追蹤與排查",
     "config_management": "閘道基礎設定",
-    "system_info": "運行與診斷資訊"
+    "system_info": "運行與診斷資訊",
+    "usage_stats": "Tokens 與費用統計"
   },
   "dashboard": {
     "hero_verdict_good": "運行平穩",
@@ -1939,5 +1941,47 @@
     "modelCatalog": {
       "notLoaded": "未載入"
     }
+  },
+  "usage_stats": {
+    "title": "用量統計",
+    "refresh": "重新整理",
+    "range_24h": "24 小時",
+    "range_7d": "7 天",
+    "range_30d": "30 天",
+    "range_custom": "自訂",
+    "custom_from": "開始",
+    "custom_to": "結束",
+    "disabled_hint": "此伺服器的用量統計已停用(config.yaml 中 usage-stats.enabled: false),未記錄任何事件。",
+    "card_requests": "請求數",
+    "card_tokens_hint": "共 {{count}} tokens",
+    "card_input": "輸入 tokens",
+    "card_output": "輸出 tokens",
+    "card_cost": "花費 (USD)",
+    "cost_split": "上游回報 {{upstream}} · 預估 {{computed}}",
+    "chart_title": "按提供商的每日花費(所選時間範圍)",
+    "empty_chart": "該範圍內暫無活動",
+    "table_title": "明細",
+    "group_provider": "按提供商",
+    "group_model": "按模型",
+    "group_auth_file": "按憑證",
+    "col_key": "項",
+    "col_requests": "請求數",
+    "col_input": "輸入",
+    "col_output": "輸出",
+    "col_cost": "花費",
+    "empty_title": "尚無用量記錄",
+    "empty_description": "完成請求並寫入後,用量統計會顯示在這裡(config.yaml 的 usage-stats 部分)。"
+  },
+  "kiro_quota": {
+    "plan": "方案",
+    "empty_data": "尚無額度資料。",
+    "missing_auth_index": "缺少憑證索引。",
+    "request_failed": "取得 Kiro 額度失敗(狀態 {{status}})。"
+  },
+  "mirasim_quota": {
+    "plan": "方案",
+    "empty_data": "尚無額度資料。",
+    "missing_auth_index": "缺少憑證索引。",
+    "request_failed": "取得 Mirasim 額度失敗(狀態 {{status}})。"
   }
 }
