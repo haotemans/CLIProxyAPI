@@ -38,7 +38,7 @@ Mirasim relay in `config.yaml`:
 api-keys:
   mirasim:
     - name: my-relay
-      base-url: "https://your-relay.example.com"   # required
+      base-url: "https://relay.mirasim.ai"   # required; mirasim.ai user token as the key
       keys:
         - api-key: "your-key"
       models:

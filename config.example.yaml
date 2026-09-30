@@ -596,7 +596,7 @@ requests:
 #           match:
 #             - "quota exceeded"
 #           action: "continue-and-cooldown"
-#       base-url: "https://your-mirasim-relay.example.com" # REQUIRED: the relay endpoint
+#       base-url: "https://relay.mirasim.ai" # REQUIRED: the relay endpoint (mirasim.ai accounts use https://relay.mirasim.ai with the account user token as key)
 #       headers:
 #         X-Custom-Header: "custom-value"
 #         # Values starting with "$" dynamically copy the header value from downstream client requests.
