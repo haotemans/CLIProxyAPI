@@ -412,7 +412,22 @@ type UsageStatsConfig struct {
 	Pricing map[string]UsageStatsPrice `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 }
 
-// QuotaExceeded defines the behavior when API quota limits are exceeded.
+// ModelProbeConfig controls per-credential model capability probing.
+// See internal/modelprobe for the engine semantics; cost note: each cycle
+// fires one tiny real request per advertised model per credential.
+type ModelProbeConfig struct {
+	// Enabled toggles the scheduler. Default false (safe).
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// Interval is the probe interval in seconds. Default 21600 (6h).
+	Interval int `yaml:"interval" json:"interval"`
+	// MaxParallel bounds concurrent in-flight probes. Default 4.
+	MaxParallel int `yaml:"max-parallel" json:"max-parallel"`
+	// MaxModelsPerCredentialPerCycle caps per-credential probes per cycle
+	// (0 = unlimited). Guard rail for huge catalogs on precious quotas.
+	MaxModelsPerCredentialPerCycle int `yaml:"max-models-per-credential-per-cycle" json:"max-models-per-credential-per-cycle"`
+}
+
+// UsageStatsConfig controls the native usage/cost statistics recorder and
 // It provides configuration options for automatic failover mechanisms.
 type QuotaExceeded struct {
 	// SwitchProject indicates whether to automatically switch to another project when a quota is exceeded.

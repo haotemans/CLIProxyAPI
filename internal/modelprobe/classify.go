@@ -1,0 +1,102 @@
+package modelprobe
+
+import "strings"
+
+// notAvailableMarkers hits provider-specific text that unambiguously means
+// "this account cannot use this model" — tier gates, unavailable flags and
+// unknown model errors across OpenAI/Anthropic/Connect/Codewhisperer styles.
+var notAvailableMarkers = []string{
+	"model is not enabled",
+	"model not enabled",
+	"not enabled for",
+	"model not available",
+	"not available in your plan",
+	"not supported for your account",
+	"unsupported model",
+	"unknown model",
+	"does not exist",
+	"model_not_found",
+	"model is blocked",
+	"not part of your subscription",
+	"upgrade required",
+	"pro plan",
+	"on-demand",
+	"abuse scope does not cover",
+	"not included in your subscription",
+	"resource_not_found",
+	"permission denied for model",
+	"not entitled",
+	"model access denied",
+	"insufficient credit for model",
+}
+
+// authMarkers substrings that mean the credential itself was rejected.
+var authMarkers = []string{
+	"invalid token",
+	"invalid api key",
+	"invalid access token",
+	"account suspended",
+	"forbidden for this account",
+	"account not found",
+	"sign in again",
+}
+
+// classifyProbeError maps an executor error onto a probe status. nil means the
+// request may still be classified usable (caller decides); error-free probes
+// never reach here.
+func classifyProbeError(err error) Status {
+	if err == nil {
+		return StatusUsable
+	}
+	status := 0
+	if se, ok := err.(interface{ StatusCode() int }); ok {
+		status = se.StatusCode()
+	}
+	switch status {
+	case 401:
+		return StatusAuthError
+	case 403:
+		// permission_denied on the account
+		return StatusAuthError
+	case 429:
+		return StatusLimited
+	case 408, 425, 502, 503, 504:
+		return StatusUnreachable
+	case 400, 404, 422:
+		if isAuthMessage(err) {
+			return StatusAuthError
+		}
+		return StatusNotAvailable
+	}
+	if isAuthMessage(err) {
+		return StatusAuthError
+	}
+	if isNotAvailableMessage(err) {
+		return StatusNotAvailable
+	}
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "resource_exhausted") || strings.Contains(msg, "rate limit") || strings.Contains(msg, "quota") || strings.Contains(msg, "too many") {
+		return StatusLimited
+	}
+	return StatusUnreachable
+}
+
+func isNotAvailableMessage(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, marker := range notAvailableMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAuthMessage(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, marker := range authMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}

@@ -111,6 +111,10 @@ type Config struct {
 	// (sqlite-backed; GET /v0/management/usage-meters/*). Enabled by default.
 	UsageStats UsageStatsConfig `yaml:"usage-stats" json:"usage-stats"`
 
+	// ModelProbe probes each advertised model per credential with live minimal
+	// requests (GET /v0/management/model-probe/*). Disabled by default.
+	ModelProbe ModelProbeConfig `yaml:"model-probe" json:"model-probe"`
+
 	// WebsocketAuth enables or disables authentication for the WebSocket API.
 	WebsocketAuth bool `yaml:"ws-auth" json:"ws-auth"`
 
