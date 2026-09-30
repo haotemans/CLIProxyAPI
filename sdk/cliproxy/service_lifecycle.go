@@ -283,6 +283,8 @@ func (s *Service) Shutdown(ctx context.Context) error {
 
 		// legacy refresh loop removed; only stopping core auth manager below
 
+		s.ShutdownModelProbe()
+
 		if s.watcherCancel != nil {
 			s.watcherCancel()
 		}

@@ -9,6 +9,7 @@ import (
 	clineauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/cline"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelconfig"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelprobe"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -326,6 +327,12 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 	key := provider
 	if key == "" {
 		key = strings.ToLower(strings.TrimSpace(a.Provider))
+	}
+	// Per-credential probe pruning: models the last modelprobe cycle classified
+	// not_available drop out of this credential's advertised set. Without any
+	// `model_probe` section the catalog passes through unchanged.
+	if probeSection := modelprobe.ReadSection(a.Metadata); probeSection != nil && len(probeSection.Pruned) > 0 {
+		models = modelprobe.FilterPrunedForAuth(a.Metadata, models)
 	}
 	models = s.appendPluginModels(key, models)
 	if len(models) > 0 {

@@ -240,6 +240,14 @@ func (s *Service) handleAuthUpdates(ctx context.Context, updates []watcher.AuthU
 			s.maybeDetectClineModels(update.Auth)
 		}
 	}
+
+	// First-import model probing: each newly registered (and never probed)
+	// credential runs one detached capability probe; interval cycles refresh.
+	for _, update := range updates {
+		if update.Action == watcher.AuthUpdateActionAdd && update.Auth != nil {
+			s.maybeProbeNewAuth(ctx, update.Auth)
+		}
+	}
 }
 
 func coalesceAuthUpdates(updates []watcher.AuthUpdate) []watcher.AuthUpdate {

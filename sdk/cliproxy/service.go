@@ -11,6 +11,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/api"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/homeplugins"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelprobe"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/watcher"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/wsrelay"
@@ -118,6 +119,8 @@ type Service struct {
 	updateServerClientsContextFn func(context.Context, *config.Config) bool
 	homeSupervisor               *homeSubscriberSupervisor
 	homeMu                       sync.Mutex
+	modelProbeMu                 sync.Mutex
+	modelProbe                   *modelprobe.Scheduler
 	homeGeneration               uint64
 	homeClient                   *home.Client
 	homeRegistry                 *executionregistry.Registry
