@@ -801,6 +801,19 @@ requests:
 #                                               # "0.0.0.0:18317" to expose the manager publicly exactly like
 #                                               # the old standalone CPAMP panel at :18317, in the one process.
 
+# Native usage/cost statistics: completed-request records are persisted into a
+# local sqlite database (pure-Go driver, works in CGO_ENABLED=0 builds) and can
+# be queried via GET /v0/management/usage-meters/summary and /usage-meters/series,
+# or browsed in the management panel (观测 > 用量统计). Independent of the
+# vendor/plugin quota features. Restart required when changing enabled/path.
+# usage-stats:
+#   enabled: true                 # default true; set false to disable the recorder
+#   path: ""                      # default <auth-dir>/usage-stats.db
+#   retention-days: 90            # hourly sweep deletes older events
+#   pricing:                      # merges on top of embedded defaults (longest prefix wins)
+#     "claude-opus-4-6": { input: 5, output: 25 }   # USD per 1M tokens
+#     "composer-2":      { input: 1.25, output: 6 }
+
 # OAuth/file-backed credentials. Token material stays in the credential store.
 oauth:
   # Authentication directory (supports ~ for home directory)
