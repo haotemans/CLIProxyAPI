@@ -891,6 +891,7 @@
     "plugin_oauth_status_success": "Аутентификация успешна!",
     "plugin_oauth_status_error": "Ошибка аутентификации:",
     "plugin_oauth_start_error": "Не удалось запустить OAuth плагина:",
+    "plugin_oauth_polling_error": "Не удалось проверить статус OAuth плагина:",
     "xai_callback_label": "Callback URL или код",
     "xai_callback_placeholder": "Вставьте код со страницы Grok или полный callback URL",
     "xai_callback_hint": "Grok иногда показывает только код на странице. Вставьте этот код напрямую, приложение автоматически отправит его как http://127.0.0.1:56121/callback?...",

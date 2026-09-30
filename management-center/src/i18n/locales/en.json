@@ -888,6 +888,7 @@
     "plugin_oauth_status_success": "Authentication successful!",
     "plugin_oauth_status_error": "Authentication failed:",
     "plugin_oauth_start_error": "Failed to start plugin OAuth:",
+    "plugin_oauth_polling_error": "Failed to check plugin OAuth status:",
     "xai_callback_label": "Callback URL or code",
     "xai_callback_placeholder": "Paste the code shown by Grok, or the full callback URL",
     "xai_callback_hint": "Grok may only show a code on the page. Paste that code directly and the app will submit it as http://127.0.0.1:56121/callback?... automatically.",

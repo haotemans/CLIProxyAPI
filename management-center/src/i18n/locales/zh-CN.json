@@ -886,6 +886,7 @@
     "plugin_oauth_status_success": "认证成功！",
     "plugin_oauth_status_error": "认证失败:",
     "plugin_oauth_start_error": "启动插件 OAuth 失败:",
+    "plugin_oauth_polling_error": "检查插件 OAuth 状态失败:",
     "xai_callback_label": "回调 URL 或授权码",
     "xai_callback_placeholder": "粘贴页面显示的 code，或完整 callback URL",
     "xai_callback_hint": "Grok 有时只在页面显示 code。可直接粘贴 code，系统会自动拼接为 http://127.0.0.1:56121/callback?... 后提交。",
