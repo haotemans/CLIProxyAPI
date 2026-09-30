@@ -405,7 +405,12 @@
     "quota_refresh_single": "Refresh quota",
     "quota_refresh_hint": "Refresh quota only for this credential",
     "quota_refresh_success": "Quota refreshed for \"{{name}}\"",
-    "quota_refresh_failed": "Failed to refresh quota for \"{{name}}\": {{message}}"
+    "quota_refresh_failed": "Failed to refresh quota for \"{{name}}\": {{message}}",
+    "probe_run": "Probe now",
+    "probe_never": "Models not probed yet",
+    "probe_summary": "Probe: {{usable}} usable · {{pruned}} pruned · {{checked_at}}",
+    "probe_failed": "Probe failed: {{message}}",
+    "probe_pruned_detail": "Pruned: {{models}}"
   },
   "antigravity_subscription": {
     "plan_unknown": "Unknown",

@@ -814,6 +814,21 @@ requests:
 #     "claude-opus-4-6": { input: 5, output: 25 }   # USD per 1M tokens
 #     "composer-2":      { input: 1.25, output: 6 }
 
+# Native model capability probing: per-credential probes fire one tiny real
+# request per advertised model (max_tokens=1, prompt "hi") through each
+# provider's own executor path, persist usable/pruned results into the
+# credential file (model_probe section), and re-probe periodically so models
+# re-appear when they become usable again. Cost note: one tiny request per
+# model per credential per cycle (max-models caps below). Status UI in the
+# panel (认证文件 card probe line), API:
+#   GET  /v0/management/model-probe/status
+#   POST /v0/management/model-probe/run {"auth_index": "..."}
+# model-probe:
+#   enabled: false                  # default off (safe); probes contact upstreams
+#   interval: 21600                 # cycle interval in seconds (default 6h)
+#   max-parallel: 4                 # concurrent in-flight probes
+#   max-models-per-credential-per-cycle: 0  # 0 = probe every advertised model
+
 # OAuth/file-backed credentials. Token material stays in the credential store.
 oauth:
   # Authentication directory (supports ~ for home directory)

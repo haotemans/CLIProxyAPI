@@ -22,6 +22,7 @@ import {
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
+import { useModelProbeStatus } from '@/features/authFiles/modelProbe/useModelProbeStatus';
 import { AuthFileDetailsSheet } from '@/features/authFiles/components/AuthFileDetailsSheet';
 import { AuthFileModelsModal } from '@/features/authFiles/components/AuthFileModelsModal';
 import { AuthFilesToolbar } from '@/features/authFiles/components/AuthFilesToolbar';
@@ -165,7 +166,7 @@ export function AuthFilesPage() {
     handleDeleteAlias,
   } = useAuthFilesOauth({ viewMode, files });
 
-  const {
+    const {
     prefixProxyEditor,
     prefixProxyUpdatedText,
     prefixProxyDirty,
@@ -177,6 +178,8 @@ export function AuthFilesPage() {
     disableControls: connectionStatus !== 'connected',
     loadFiles,
   });
+
+  const { rowsByFile: modelProbeRows, updateRow: updateModelProbeRow } = useModelProbeStatus(files);
 
   const disableControls = connectionStatus !== 'connected';
   const normalizedFilter = normalizeProviderKey(String(filter));
@@ -698,6 +701,8 @@ export function AuthFilesPage() {
                 quotaFilterType={activeQuotaFilter}
                 statusBarCache={statusBarCache}
                 entranceDelayMs={cardEntranceDelay(index)}
+                modelProbeRow={modelProbeRows[file.name]}
+                onModelProbed={updateModelProbeRow}
                 onShowModels={showModels}
                 onDownload={handleDownload}
                 onManualRefresh={handleManualRefresh}

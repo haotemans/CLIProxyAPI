@@ -403,7 +403,12 @@
     "quota_refresh_single": "重新整理配額",
     "quota_refresh_hint": "僅重新整理該驗證檔案的配額",
     "quota_refresh_success": "已重新整理「{{name}}」的配額",
-    "quota_refresh_failed": "重新整理「{{name}}」的配額失敗：{{message}}"
+    "quota_refresh_failed": "重新整理「{{name}}」的配額失敗：{{message}}",
+    "probe_run": "立即探測",
+    "probe_never": "尚未探測模型",
+    "probe_summary": "模型探測:可用 {{usable}} · 剔除 {{pruned}} · {{checked_at}}",
+    "probe_failed": "探測失敗:{{message}}",
+    "probe_pruned_detail": "已剔除:{{models}}"
   },
   "antigravity_subscription": {
     "plan_unknown": "未知",

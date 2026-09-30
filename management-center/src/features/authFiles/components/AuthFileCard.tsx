@@ -32,6 +32,7 @@ import { deriveAuthFileIdentity } from '@/features/authFiles/identity';
 import { resolveAuthFileQuotaType } from '@/features/authFiles/logic';
 import type { AuthFileStatusBarData } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
 import { AuthFileQuotaSection } from '@/features/authFiles/components/AuthFileQuotaSection';
+import { AuthFileProbeSection } from '@/features/authFiles/modelProbe/AuthFileProbeSection';
 import { AuthFileCooldownSection } from './AuthFileCooldownSection';
 import styles from './AuthFileCard.module.scss';
 
@@ -48,6 +49,14 @@ export type AuthFileCardProps = {
   statusBarCache: Map<string, AuthFileStatusBarData>;
   /** 首屏一次性级联入场的延迟；null/undefined 表示不做入场动画。 */
   entranceDelayMs?: number | null;
+  modelProbeRow?: import('@/features/authFiles/modelProbe/logic').ProbeRowByFile[string];
+  onModelProbed?: (file: string, summary: {
+    probed?: boolean;
+    checked_at?: string;
+    usable?: number;
+    pruned?: number;
+    pruned_models?: string[];
+  }) => void;
   onShowModels: (file: AuthFileItem) => void;
   onDownload: (name: string) => void;
   onManualRefresh: (file: AuthFileItem) => void;
@@ -71,6 +80,8 @@ export function AuthFileCard(props: AuthFileCardProps) {
     quotaFilterType,
     statusBarCache,
     entranceDelayMs,
+    modelProbeRow,
+    onModelProbed,
     onShowModels,
     onDownload,
     onManualRefresh,
@@ -232,6 +243,10 @@ export function AuthFileCard(props: AuthFileCardProps) {
 
       {showQuotaLayout && quotaType && (
         <AuthFileQuotaSection file={file} quotaType={quotaType} disableControls={disableControls} />
+      )}
+
+      {!isRuntimeOnly && !compact && onModelProbed && (
+        <AuthFileProbeSection file={file} row={modelProbeRow} onProbed={onModelProbed} />
       )}
 
       <footer className={styles.actions}>
