@@ -14,6 +14,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/sidecars"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/usagestats"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy"
 	log "github.com/sirupsen/logrus"
 )
@@ -35,6 +36,12 @@ func StartServiceWithPluginHost(cfg *config.Config, configPath string, localPass
 	if sidecarManager := sidecars.NewManager(cfg); sidecarManager.Enabled() {
 		serverOptions = append(serverOptions, api.WithSidecars(sidecarManager))
 	}
+	serverOptions = append(serverOptions, api.WithConfigReloadHook(func(_ context.Context, reloaded *config.Config) {
+		usagestats.ApplyReload(reloaded)
+	}))
+	stopUsageStats := startUsageStats(cfg)
+	defer stopUsageStats()
+
 	builder := cliproxy.NewBuilder().
 		WithConfig(cfg).
 		WithConfigPath(configPath).
@@ -82,6 +89,11 @@ func StartServiceBackgroundWithPluginHost(cfg *config.Config, configPath string,
 	if sidecarManager := sidecars.NewManager(cfg); sidecarManager.Enabled() {
 		serverOptions = append(serverOptions, api.WithSidecars(sidecarManager))
 	}
+	serverOptions = append(serverOptions, api.WithConfigReloadHook(func(_ context.Context, reloaded *config.Config) {
+		usagestats.ApplyReload(reloaded)
+	}))
+	stopUsageStats := startUsageStats(cfg)
+
 	builder := cliproxy.NewBuilder().
 		WithConfig(cfg).
 		WithConfigPath(configPath).
@@ -105,12 +117,23 @@ func StartServiceBackgroundWithPluginHost(cfg *config.Config, configPath string,
 
 	go func() {
 		defer close(doneCh)
+		defer stopUsageStats()
 		if err := service.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Errorf("proxy service exited with error: %v", err)
 		}
 	}()
 
 	return cancelFn, doneCh
+}
+
+// startUsageStats boots the native usage recorder for the config when enabled.
+func startUsageStats(cfg *config.Config) func() {
+	stop, err := usagestats.Start(cfg)
+	if err != nil {
+		log.Errorf("usage stats recorder failed to start (continuing without persistence): %v", err)
+		return func() {}
+	}
+	return stop
 }
 
 // WaitForCloudDeploy waits indefinitely for shutdown signals in cloud deploy mode

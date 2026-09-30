@@ -388,6 +388,30 @@ type UnifiedConfig struct {
 	Manager UnifiedManagerConfig `yaml:"manager" json:"manager"`
 }
 
+// UsageStatsPrice holds USD-per-1M-token rates used for computed cost when
+// the upstream does not report spend itself.
+type UsageStatsPrice struct {
+	// Input is USD per 1M input tokens.
+	Input float64 `yaml:"input" json:"input"`
+	// Output is USD per 1M output tokens.
+	Output float64 `yaml:"output" json:"output"`
+}
+
+// UsageStatsConfig controls the native usage/cost statistics recorder and
+// pricing table. See internal/usagestats.
+type UsageStatsConfig struct {
+	// Enabled toggles the persistent usage recorder. Omitted means enabled.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// Path is the sqlite database file. Default <auth-dir>/usage-stats.db.
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+	// RetentionDays prunes events older than this many days (hourly sweep).
+	// Zero keeps the default of 90.
+	RetentionDays int `yaml:"retention-days" json:"retention-days"`
+	// Pricing maps model-id prefixes to USD-per-1M-token rates; the longest
+	// matching prefix wins. Overrides merge on top of the embedded defaults.
+	Pricing map[string]UsageStatsPrice `yaml:"pricing,omitempty" json:"pricing,omitempty"`
+}
+
 // QuotaExceeded defines the behavior when API quota limits are exceeded.
 // It provides configuration options for automatic failover mechanisms.
 type QuotaExceeded struct {

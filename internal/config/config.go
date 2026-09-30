@@ -107,6 +107,10 @@ type Config struct {
 	// Changing this section requires a restart; hot reload does not apply.
 	Unified UnifiedConfig `yaml:"unified" json:"unified"`
 
+	// UsageStats is the native per-request usage/cost accounting recorder
+	// (sqlite-backed; GET /v0/management/usage-meters/*). Enabled by default.
+	UsageStats UsageStatsConfig `yaml:"usage-stats" json:"usage-stats"`
+
 	// WebsocketAuth enables or disables authentication for the WebSocket API.
 	WebsocketAuth bool `yaml:"ws-auth" json:"ws-auth"`
 
