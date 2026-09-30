@@ -9,6 +9,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/sidecars"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 )
@@ -27,6 +28,7 @@ type serverOptionConfig struct {
 	pluginHost            *pluginhost.Host
 	configReloadHook      func(context.Context, *config.Config)
 	exampleAPIKeySafeMode bool
+	sidecars              *sidecars.Manager
 }
 
 // ServerOption customises HTTP server construction.
@@ -126,6 +128,15 @@ func WithPluginHost(host *pluginhost.Host) ServerOption {
 func WithConfigReloadHook(hook func(context.Context, *config.Config)) ServerOption {
 	return func(cfg *serverOptionConfig) {
 		cfg.configReloadHook = hook
+	}
+}
+
+// WithSidecars attaches the embedded sidecar manager (keeper/manager) to the
+// server: start/stop follows the server lifecycle, proxies are mounted during
+// route registration, and the management status endpoint reports state.
+func WithSidecars(m *sidecars.Manager) ServerOption {
+	return func(cfg *serverOptionConfig) {
+		cfg.sidecars = m
 	}
 }
 

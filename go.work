@@ -1,0 +1,7 @@
+go 1.26.0
+
+use (
+	.
+	./cpa-usage-keeper
+	./cpa-manager-plus/apps/manager-server
+)

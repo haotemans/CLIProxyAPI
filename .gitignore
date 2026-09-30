@@ -73,3 +73,4 @@ data/*
 
 # Local cross-build artifacts
 /cli-proxy-api-*
+go.work.sum

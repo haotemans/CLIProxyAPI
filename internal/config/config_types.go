@@ -335,6 +335,54 @@ type RemoteManagement struct {
 	BaseURL string `yaml:"base-url,omitempty" json:"base-url,omitempty"`
 }
 
+// UnifiedKeeperConfig configures the embedded cpa-usage-keeper sidecar (served
+// under /keeper/ on the main port, listening locally on 127.0.0.1:18080).
+type UnifiedKeeperConfig struct {
+	// Enabled starts keeper inside the CPA process when the top-level
+	// unified.enabled is also true.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// DataDir is keeper's work directory (sqlite, logs, backups).
+	// Example on the managed server: /root/cpa-usage-keeper/data.
+	DataDir string `yaml:"data-dir" json:"data-dir"`
+	// LoginPassword protects keeper's own UI and admin API. Required when
+	// keeper is enabled; without it the sidecar reports a startup error and the
+	// rest of CPA keeps serving (graceful degradation).
+	LoginPassword string `yaml:"login-password" json:"login-password"`
+}
+
+// UnifiedManagerConfig configures the embedded cpa-manager-plus sidecar
+// (served under /manager/ on the main port, listening locally on 127.0.0.1:18317).
+type UnifiedManagerConfig struct {
+	// Enabled starts manager-plus inside the CPA process when the top-level
+	// unified.enabled is also true.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// DataDir is the manager's data directory (usage sqlite, archives, data key).
+	// Example on the managed server: /root/cpa-manager-plus/data.
+	DataDir string `yaml:"data-dir" json:"data-dir"`
+	// AdminKey is CPA_MANAGER_ADMIN_KEY. When empty, the manager bootstraps and
+	// generates an admin key on first run (logged once).
+	AdminKey string `yaml:"admin-key" json:"admin-key"`
+	// CollectorMode selects the usage collector transport ("auto", "http",
+	// "resp" or "subscribe"). Empty keeps the manager default ("auto").
+	CollectorMode string `yaml:"collector-mode" json:"collector-mode"`
+}
+
+// UnifiedConfig embeds the vendored sidecars into the CPA process behind
+// loopback listeners reverse-proxied from the main HTTP server.
+type UnifiedConfig struct {
+	// Enabled is the master switch for the unified application. Default false;
+	// when false no sidecar starts and no proxy routes are registered.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// ManagementKey authenticates the sidecars against the CPA management API
+	// (plaintext). When empty, the plaintext remote-management.secret-key is
+	// used as fallback (bcrypt-hashed keys cannot be shared).
+	ManagementKey string `yaml:"management-key" json:"management-key"`
+	// Keeper configures the embedded cpa-usage-keeper sidecar.
+	Keeper UnifiedKeeperConfig `yaml:"keeper" json:"keeper"`
+	// Manager configures the embedded cpa-manager-plus sidecar.
+	Manager UnifiedManagerConfig `yaml:"manager" json:"manager"`
+}
+
 // QuotaExceeded defines the behavior when API quota limits are exceeded.
 // It provides configuration options for automatic failover mechanisms.
 type QuotaExceeded struct {

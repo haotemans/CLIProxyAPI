@@ -102,6 +102,11 @@ type Config struct {
 	// Routing controls credential selection behavior.
 	Routing RoutingConfig `yaml:"routing" json:"routing"`
 
+	// Unified embeds the vendored sidecars (cpa-usage-keeper as /keeper/ and
+	// cpa-manager-plus as /manager/) inside this process. Disabled by default.
+	// Changing this section requires a restart; hot reload does not apply.
+	Unified UnifiedConfig `yaml:"unified" json:"unified"`
+
 	// WebsocketAuth enables or disables authentication for the WebSocket API.
 	WebsocketAuth bool `yaml:"ws-auth" json:"ws-auth"`
 
