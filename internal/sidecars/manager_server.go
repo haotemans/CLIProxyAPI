@@ -24,7 +24,7 @@ func (m *Manager) runManager(ctx context.Context, cfg *config.Config, entry *Ent
 	}
 
 	return managerembed.Run(ctx, managerembed.Options{
-		HTTPAddr:       ManagerTarget,
+		HTTPAddr:       m.managerHTTPAddr(),
 		DataDir:        dataDir,
 		DBPath:         "",
 		DataKeyPath:    "",

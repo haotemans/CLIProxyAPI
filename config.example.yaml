@@ -796,6 +796,10 @@ requests:
 #     data-dir: "/root/cpa-manager-plus/data"   # usage sqlite, archives, data key
 #     admin-key: ""                             # optional; manager generates one on first run when empty
 #     collector-mode: "auto"                    # auto | http | resp | subscribe
+#     http-addr: "127.0.0.1:18317"              # embedded manager bind address. Loopback (default) keeps the
+#                                               # panel private behind the :8317 /manager/ proxy. Set to
+#                                               # "0.0.0.0:18317" to expose the manager publicly exactly like
+#                                               # the old standalone CPAMP panel at :18317, in the one process.
 
 # OAuth/file-backed credentials. Token material stays in the credential store.
 oauth:

@@ -61,6 +61,9 @@ type Entry struct {
 	LastError string `json:"last_error,omitempty"`
 	// Note carries an informational caveat (e.g. SPA unsupported).
 	Note string `json:"note,omitempty"`
+	// HTTPAddr is the sidecar's effective bind address (manager only; keeper
+	// always binds its fixed loopback target).
+	HTTPAddr string `json:"http_addr,omitempty"`
 
 	started bool
 	running bool
@@ -160,9 +163,20 @@ func (m *Manager) buildEntries() []*Entry {
 		Enabled:  m.unified.Manager.Enabled,
 		BasePath: ManagerBasePath,
 		Target:   ManagerTarget,
+		HTTPAddr: m.managerHTTPAddr(),
 		Note:     managerNote,
 	})
 	return entries
+}
+
+// managerHTTPAddr resolves the embedded manager's effective bind address.
+// The /manager/* proxy always targets the loopback address regardless of what
+// the manager binds to; a 0.0.0.0 bind still answers loopback requests.
+func (m *Manager) managerHTTPAddr() string {
+	if addr := strings.TrimSpace(m.unified.Manager.HTTPAddr); addr != "" {
+		return addr
+	}
+	return ManagerTarget
 }
 
 // Stop cancels the sidecar context and waits (bounded) for runners to exit.
@@ -211,6 +225,7 @@ func (m *Manager) Status(c *gin.Context) {
 			BasePath: entry.BasePath,
 			Target:   entry.Target,
 			Note:     entry.Note,
+			HTTPAddr: entry.HTTPAddr,
 		}
 		if entry.lastErr != nil {
 			item.LastError = entry.lastErr.Error()

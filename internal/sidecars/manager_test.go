@@ -194,6 +194,7 @@ func TestStatusJSON(t *testing.T) {
 			Target    string `json:"target"`
 			LastError string `json:"last_error"`
 			Note      string `json:"note"`
+			HTTPAddr  string `json:"http_addr"`
 		} `json:"sidecars"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -213,6 +214,7 @@ func TestStatusJSON(t *testing.T) {
 		Target    string `json:"target"`
 		LastError string `json:"last_error"`
 		Note      string `json:"note"`
+		HTTPAddr  string `json:"http_addr"`
 	}
 	for i := range body.Sidecars {
 		switch body.Sidecars[i].Name {
@@ -234,8 +236,56 @@ func TestStatusJSON(t *testing.T) {
 	if managerEntry.BasePath != ManagerBasePath || managerEntry.Target != ManagerTarget {
 		t.Fatalf("manager entry = %+v", managerEntry)
 	}
+	if managerEntry.HTTPAddr != ManagerTarget {
+		t.Fatalf("default manager http_addr = %q, want %q", managerEntry.HTTPAddr, ManagerTarget)
+	}
+	if keeper.HTTPAddr != "" {
+		t.Fatalf("keeper must not report http_addr, got %q", keeper.HTTPAddr)
+	}
 	if managerEntry.Note == "" {
 		t.Fatal("manager note (SPA caveat) should be present")
+	}
+}
+
+func TestManagerHTTPAddrResolution(t *testing.T) {
+	cfg := testConfig()
+	m := NewManager(cfg)
+	if got := m.managerHTTPAddr(); got != ManagerTarget {
+		t.Fatalf("default managerHTTPAddr = %q, want %q", got, ManagerTarget)
+	}
+
+	cfg.Unified.Manager.HTTPAddr = "0.0.0.0:18317"
+	m = NewManager(cfg)
+	if got := m.managerHTTPAddr(); got != "0.0.0.0:18317" {
+		t.Fatalf("override managerHTTPAddr = %q, want 0.0.0.0:18317", got)
+	}
+
+	// The override flows into the entry's reported bind address...
+	m.mu.Lock()
+	entries := m.buildEntries()
+	m.mu.Unlock()
+	var managerEntry *Entry
+	for _, e := range entries {
+		if e.Name == nameManager {
+			managerEntry = e
+		}
+	}
+	if managerEntry == nil {
+		t.Fatal("manager entry missing")
+	}
+	if managerEntry.HTTPAddr != "0.0.0.0:18317" {
+		t.Fatalf("manager entry http_addr = %q", managerEntry.HTTPAddr)
+	}
+	// ...while the /manager/* proxy still targets the loopback address.
+	if managerEntry.Target != ManagerTarget {
+		t.Fatalf("proxy target changed = %q, want fixed %q", managerEntry.Target, ManagerTarget)
+	}
+
+	// Whitespace-only override behaves as unset.
+	cfg.Unified.Manager.HTTPAddr = "  "
+	m = NewManager(cfg)
+	if got := m.managerHTTPAddr(); got != ManagerTarget {
+		t.Fatalf("whitespace managerHTTPAddr = %q, want %q", got, ManagerTarget)
 	}
 }
 

@@ -365,6 +365,11 @@ type UnifiedManagerConfig struct {
 	// CollectorMode selects the usage collector transport ("auto", "http",
 	// "resp" or "subscribe"). Empty keeps the manager default ("auto").
 	CollectorMode string `yaml:"collector-mode" json:"collector-mode"`
+	// HTTPAddr is the embedded manager's bind address. Default 127.0.0.1:18317
+	// keeps everything internal; set 0.0.0.0:18317 to expose the manager
+	// publicly exactly like the old standalone unit. The /manager/* proxy
+	// always targets the loopback target either way.
+	HTTPAddr string `yaml:"http-addr" json:"http-addr"`
 }
 
 // UnifiedConfig embeds the vendored sidecars into the CPA process behind
