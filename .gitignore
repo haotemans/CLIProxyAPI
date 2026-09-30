@@ -32,6 +32,7 @@ auths/*
 docs/*
 !docs/management-api-v8.md
 !docs/new-api-integration.md
+!docs/plugins-deployment.md
 AGENTS.md
 CLAUDE.md
 GEMINI.md
