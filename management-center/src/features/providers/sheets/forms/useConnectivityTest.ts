@@ -15,6 +15,8 @@ import type { ApiKeyEntryInput, ModelEntryInput, ProviderBrand } from '../../typ
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_ANTHROPIC_VERSION = '2023-06-01';
+const COMMANDCODE_DEFAULT_BASE_URL = 'https://api.commandcode.ai/provider/v1';
+const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1';
 
 export type ConnectivityState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -80,12 +82,14 @@ export interface UseConnectivityTestResult {
   codexStatus: ConnectivityStatus;
   geminiStatus: ConnectivityStatus;
   claudeStatus: ConnectivityStatus;
+  relayStatus: ConnectivityStatus;
   isTestingAny: boolean;
   runOpenAIKey: (idx: number) => Promise<boolean>;
   runOpenAIAllKeys: () => Promise<void>;
   runCodex: () => Promise<void>;
   runGemini: () => Promise<void>;
   runClaude: () => Promise<void>;
+  runRelay: () => Promise<void>;
 }
 
 export function useConnectivityTest(
@@ -112,6 +116,7 @@ export function useConnectivityTest(
   const [codexStatus, setCodexStatus] = useState<ConnectivityStatus>(IDLE);
   const [geminiStatus, setGeminiStatus] = useState<ConnectivityStatus>(IDLE);
   const [claudeStatus, setClaudeStatus] = useState<ConnectivityStatus>(IDLE);
+  const [relayStatus, setRelayStatus] = useState<ConnectivityStatus>(IDLE);
   const [inFlight, setInFlight] = useState(0);
 
   const entrySignatures = useMemo(
@@ -170,6 +175,7 @@ export function useConnectivityTest(
     setCodexStatus(IDLE);
     setGeminiStatus(IDLE);
     setClaudeStatus(IDLE);
+    setRelayStatus(IDLE);
   }, [signature]);
 
   const updateOpenaiStatus = useCallback((idx: number, value: ConnectivityStatus) => {
@@ -511,16 +517,96 @@ export function useConnectivityTest(
     }
   }, [apiKey, authIndex, baseUrl, brand, fallbackApiKey, formHeaders, messages, models, testModel]);
 
+  // Commandcode and OpenCode Go are OpenAI chat-completions relays: probe them
+  // with a single chat-completions POST, falling back to the public endpoint
+  // when base-url is empty (mirrors the backend default).
+  const runRelay = useCallback(async (): Promise<void> => {
+    if (brand !== 'commandcode' && brand !== 'opencodeGo') return;
+
+    const defaultBase =
+      brand === 'commandcode' ? COMMANDCODE_DEFAULT_BASE_URL : OPENCODE_GO_DEFAULT_BASE_URL;
+    const trimmedBase = baseUrl.trim() || defaultBase;
+
+    const endpoint = buildOpenAIChatCompletionsEndpoint(trimmedBase);
+    if (!endpoint) {
+      setRelayStatus({ state: 'error', message: messages.endpointInvalid });
+      return;
+    }
+
+    const model = pickModel(testModel, models);
+    if (!model) {
+      setRelayStatus({ state: 'error', message: messages.modelRequired });
+      return;
+    }
+
+    const customHeaders = buildHeaderObject(formHeaders);
+    const explicitKey = (apiKey ?? '').trim();
+    const persistedKey = (fallbackApiKey ?? '').trim();
+    const hasAuthorization = hasHeader(customHeaders, 'authorization');
+    const resolvedKey = explicitKey || persistedKey;
+    const resolvedAuthIndex = (authIndex ?? '').trim() || undefined;
+
+    if (!resolvedKey && !hasAuthorization && !resolvedAuthIndex) {
+      setRelayStatus({ state: 'error', message: messages.apiKeyRequired });
+      return;
+    }
+
+    const headerObj: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...customHeaders,
+    };
+    if (!hasHeader(headerObj, 'authorization')) {
+      if (resolvedKey) {
+        headerObj.Authorization = `Bearer ${resolvedKey}`;
+      } else if (resolvedAuthIndex) {
+        headerObj.Authorization = 'Bearer $TOKEN$';
+      }
+    }
+
+    setRelayStatus({ state: 'loading', message: '' });
+    setInFlight((n) => n + 1);
+    try {
+      const result = await apiCallApi.request(
+        {
+          authIndex: resolvedAuthIndex,
+          method: 'POST',
+          url: endpoint,
+          header: headerObj,
+          data: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: 'Hi' }],
+            stream: false,
+            max_tokens: 5,
+          }),
+        },
+        { timeout: DEFAULT_TIMEOUT_MS }
+      );
+      if (result.statusCode < 200 || result.statusCode >= 300) {
+        throw new Error(getApiCallErrorMessage(result));
+      }
+      setRelayStatus({ state: 'success', message: '' });
+    } catch (err) {
+      setRelayStatus({
+        state: 'error',
+        message: requestFailureMessage(err, messages),
+      });
+    } finally {
+      setInFlight((n) => n - 1);
+    }
+  }, [apiKey, authIndex, baseUrl, brand, fallbackApiKey, formHeaders, messages, models, testModel]);
+
   return {
     openaiStatuses,
     codexStatus,
     geminiStatus,
     claudeStatus,
+    relayStatus,
     isTestingAny: inFlight > 0,
     runOpenAIKey,
     runOpenAIAllKeys,
     runCodex,
     runGemini,
     runClaude,
+    runRelay,
   };
 }

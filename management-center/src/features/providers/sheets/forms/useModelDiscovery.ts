@@ -13,6 +13,8 @@ export const MODEL_DISCOVERY_BRANDS: ReadonlyArray<ProviderBrand> = [
   'xai',
   'claude',
   'mirasim',
+  'commandcode',
+  'opencodeGo',
   'openaiCompatibility',
 ];
 
@@ -68,6 +70,21 @@ export function useModelDiscovery(args: UseModelDiscoveryArgs): UseModelDiscover
         const key = (apiKey ?? '').trim() || (fallbackApiKey ?? '').trim();
         next = await modelsApi.fetchV1ModelsViaApiCall(
           baseUrl,
+          key,
+          baseHeaders,
+          resolvedAuthIndex
+        );
+      } else if (brand === 'commandcode' || brand === 'opencodeGo') {
+        // OpenAI-shaped relays expose GET {base-url}/models; an empty base-url
+        // falls back to the public endpoint (mirrors the backend default).
+        const key = (apiKey ?? '').trim() || (fallbackApiKey ?? '').trim();
+        const relayBase =
+          baseUrl.trim() ||
+          (brand === 'commandcode'
+            ? 'https://api.commandcode.ai/provider/v1'
+            : 'https://opencode.ai/zen/go/v1');
+        next = await modelsApi.fetchV1ModelsViaApiCall(
+          relayBase,
           key,
           baseHeaders,
           resolvedAuthIndex

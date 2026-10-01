@@ -1668,6 +1668,8 @@
       "xai": "xAI",
       "claude": "Claude",
       "mirasim": "Mirasim",
+      "commandcode": "Commandcode",
+      "opencodeGo": "OpenCode Go",
       "vertex": "Vertex",
       "openaiCompatibility": "OpenAI Compatible",
       "apikeyFun": "APIKEY.FUN",

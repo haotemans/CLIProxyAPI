@@ -11,6 +11,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   cursor: 'Cursor',
   kiro: 'Kiro',
   mirasim: 'Mirasim',
+  commandcode: 'Commandcode',
+  'opencode-go': 'OpenCode Go',
   devin: 'Devin',
   meta: 'Muse (Meta)',
   xai: 'xAI',

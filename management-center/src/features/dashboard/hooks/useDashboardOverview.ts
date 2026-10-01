@@ -99,6 +99,8 @@ export const getProviderKeyCounts = (config: Config) => ({
   xai: config.xaiApiKeys?.length ?? 0,
   claude: config.claudeApiKeys?.length ?? 0,
   mirasim: config.mirasimApiKeys?.length ?? 0,
+  commandcode: config.commandcodeApiKeys?.length ?? 0,
+  'opencode-go': config.opencodeGoApiKeys?.length ?? 0,
   vertex: config.vertexApiKeys?.length ?? 0,
   openai: config.openaiCompatibility?.length ?? 0,
 });

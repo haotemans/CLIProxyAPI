@@ -392,6 +392,20 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
       .filter(Boolean) as ProviderKeyConfig[];
   }
 
+  const commandcodeList = raw['commandcode-api-key'];
+  if (Array.isArray(commandcodeList)) {
+    config.commandcodeApiKeys = commandcodeList
+      .map((item) => normalizeProviderKeyConfig(item))
+      .filter(Boolean) as ProviderKeyConfig[];
+  }
+
+  const opencodeGoList = raw['opencode-go-api-key'];
+  if (Array.isArray(opencodeGoList)) {
+    config.opencodeGoApiKeys = opencodeGoList
+      .map((item) => normalizeProviderKeyConfig(item))
+      .filter(Boolean) as ProviderKeyConfig[];
+  }
+
   const vertexList = raw['vertex-api-key'];
   if (Array.isArray(vertexList)) {
     config.vertexApiKeys = vertexList

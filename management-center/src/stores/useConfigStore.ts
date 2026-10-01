@@ -127,6 +127,12 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         case 'mirasim-api-key':
           nextConfig.mirasimApiKeys = value as Config['mirasimApiKeys'];
           break;
+        case 'commandcode-api-key':
+          nextConfig.commandcodeApiKeys = value as Config['commandcodeApiKeys'];
+          break;
+        case 'opencode-go-api-key':
+          nextConfig.opencodeGoApiKeys = value as Config['opencodeGoApiKeys'];
+          break;
         case 'vertex-api-key':
           nextConfig.vertexApiKeys = value as Config['vertexApiKeys'];
           break;

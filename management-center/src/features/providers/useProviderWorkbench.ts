@@ -18,12 +18,14 @@ import {
   apiKeyFunToResource,
   claudeToResource,
   codexToResource,
+  commandcodeToResource,
   fennoAIToResource,
   geminiToResource,
   interactionsToResource,
   metaToResource,
   mirasimToResource,
   openaiToResource,
+  opencodeGoToResource,
   qiniuCloudToResource,
   kimiToResource,
   vertexToResource,
@@ -158,7 +160,17 @@ const buildModelAliases = (
     .filter((m) => m.name);
 
 const buildProviderKeyConfig = (
-  brand: 'gemini' | 'interactions' | 'codex' | 'meta' | 'xai' | 'claude' | 'mirasim' | 'vertex',
+  brand:
+    | 'gemini'
+    | 'interactions'
+    | 'codex'
+    | 'meta'
+    | 'xai'
+    | 'claude'
+    | 'mirasim'
+    | 'commandcode'
+    | 'opencodeGo'
+    | 'vertex',
   input: ProviderEntryFormInput,
   existing?: ProviderKeyConfig | GeminiKeyConfig | null
 ): ProviderKeyConfig | GeminiKeyConfig => {
@@ -410,6 +422,16 @@ export const buildProviderGroups = (config: Config): ProviderGroup[] =>
       case 'mirasim':
         resources = (config.mirasimApiKeys ?? []).map((item, index) =>
           mirasimToResource(item, index)
+        );
+        break;
+      case 'commandcode':
+        resources = (config.commandcodeApiKeys ?? []).map((item, index) =>
+          commandcodeToResource(item, index)
+        );
+        break;
+      case 'opencodeGo':
+        resources = (config.opencodeGoApiKeys ?? []).map((item, index) =>
+          opencodeGoToResource(item, index)
         );
         break;
       case 'vertex':
@@ -672,6 +694,14 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
           await providersApi.createMirasimConfig(
             buildProviderKeyConfig('mirasim', input) as ProviderKeyConfig
           );
+        } else if (brand === 'commandcode') {
+          await providersApi.createCommandcodeConfig(
+            buildProviderKeyConfig('commandcode', input) as ProviderKeyConfig
+          );
+        } else if (brand === 'opencodeGo') {
+          await providersApi.createOpencodeGoConfig(
+            buildProviderKeyConfig('opencodeGo', input) as ProviderKeyConfig
+          );
         } else if (brand === 'vertex') {
           await providersApi.createVertexConfig(
             buildProviderKeyConfig('vertex', input) as ProviderKeyConfig
@@ -749,6 +779,20 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
             selector.baseUrl,
             buildProviderKeyConfig('mirasim', input, existing) as ProviderKeyConfig
           );
+        } else if (brand === 'commandcode' && selector.brand === 'commandcode') {
+          const existing = resource.raw as ProviderKeyConfig;
+          await providersApi.updateCommandcodeConfig(
+            selector.apiKey,
+            selector.baseUrl,
+            buildProviderKeyConfig('commandcode', input, existing) as ProviderKeyConfig
+          );
+        } else if (brand === 'opencodeGo' && selector.brand === 'opencodeGo') {
+          const existing = resource.raw as ProviderKeyConfig;
+          await providersApi.updateOpencodeGoConfig(
+            selector.apiKey,
+            selector.baseUrl,
+            buildProviderKeyConfig('opencodeGo', input, existing) as ProviderKeyConfig
+          );
         } else if (brand === 'vertex' && selector.brand === 'vertex') {
           const existing = resource.raw as ProviderKeyConfig;
           await providersApi.updateVertexConfig(
@@ -811,6 +855,14 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
           await providersApi.deleteMirasimConfig(sel.apiKey, sel.baseUrl);
           const next = (config?.mirasimApiKeys ?? []).filter((_, i) => i !== sel.index);
           updateConfigValue('mirasim-api-key', next);
+        } else if (sel.brand === 'commandcode') {
+          await providersApi.deleteCommandcodeConfig(sel.apiKey, sel.baseUrl);
+          const next = (config?.commandcodeApiKeys ?? []).filter((_, i) => i !== sel.index);
+          updateConfigValue('commandcode-api-key', next);
+        } else if (sel.brand === 'opencodeGo') {
+          await providersApi.deleteOpencodeGoConfig(sel.apiKey, sel.baseUrl);
+          const next = (config?.opencodeGoApiKeys ?? []).filter((_, i) => i !== sel.index);
+          updateConfigValue('opencode-go-api-key', next);
         } else if (sel.brand === 'vertex') {
           await providersApi.deleteVertexConfig(sel.apiKey, sel.baseUrl);
           const next = (config?.vertexApiKeys ?? []).filter((_, i) => i !== sel.index);
@@ -884,6 +936,8 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
           (brand === 'xai' && selector.brand === 'xai') ||
           (brand === 'claude' && selector.brand === 'claude') ||
           (brand === 'mirasim' && selector.brand === 'mirasim') ||
+          (brand === 'commandcode' && selector.brand === 'commandcode') ||
+          (brand === 'opencodeGo' && selector.brand === 'opencodeGo') ||
           (brand === 'vertex' && selector.brand === 'vertex')
         ) {
           const current = resource.raw as ProviderKeyConfig;
@@ -901,6 +955,10 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
             await providersApi.updateClaudeConfig(selector.apiKey, selector.baseUrl, next);
           } else if (selector.brand === 'mirasim') {
             await providersApi.updateMirasimConfig(selector.apiKey, selector.baseUrl, next);
+          } else if (selector.brand === 'commandcode') {
+            await providersApi.updateCommandcodeConfig(selector.apiKey, selector.baseUrl, next);
+          } else if (selector.brand === 'opencodeGo') {
+            await providersApi.updateOpencodeGoConfig(selector.apiKey, selector.baseUrl, next);
           } else if (selector.brand === 'vertex') {
             await providersApi.updateVertexConfig(selector.apiKey, selector.baseUrl, next);
           }

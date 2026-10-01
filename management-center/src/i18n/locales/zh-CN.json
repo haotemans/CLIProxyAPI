@@ -1666,6 +1666,8 @@
       "xai": "xAI",
       "claude": "Claude",
       "mirasim": "Mirasim",
+      "commandcode": "Commandcode",
+      "opencodeGo": "OpenCode Go",
       "vertex": "Vertex",
       "openaiCompatibility": "OpenAI 兼容",
       "apikeyFun": "APIKEY.FUN",

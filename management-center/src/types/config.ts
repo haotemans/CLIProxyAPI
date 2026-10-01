@@ -30,6 +30,8 @@ export interface Config {
   xaiApiKeys?: ProviderKeyConfig[];
   claudeApiKeys?: ProviderKeyConfig[];
   mirasimApiKeys?: ProviderKeyConfig[];
+  commandcodeApiKeys?: ProviderKeyConfig[];
+  opencodeGoApiKeys?: ProviderKeyConfig[];
   vertexApiKeys?: ProviderKeyConfig[];
   openaiCompatibility?: OpenAIProviderConfig[];
   oauthExcludedModels?: Record<string, string[]>;
@@ -55,6 +57,8 @@ export type RawConfigSection =
   | 'xai-api-key'
   | 'claude-api-key'
   | 'mirasim-api-key'
+  | 'commandcode-api-key'
+  | 'opencode-go-api-key'
   | 'vertex-api-key'
   | 'openai-compatibility'
   | 'oauth-excluded-models';

@@ -73,6 +73,10 @@ const formatJsonObject = (value?: Record<string, unknown>): string => {
 // test-model and cooling behavior, but never the Claude-only cloak/fingerprint fields.
 const isClaudeLikeBrand = (brand: ProviderBrand): boolean =>
   brand === 'claude' || brand === 'mirasim';
+// Commandcode and OpenCode Go are OpenAI chat-completions relays with a default
+// public base-url; they share the relay connectivity probe and test-model behavior.
+const isOpenAIRelayBrand = (brand: ProviderBrand): boolean =>
+  brand === 'commandcode' || brand === 'opencodeGo';
 const isClaudeBrand = (brand: ProviderBrand): boolean => brand === 'claude';
 
 function buildInitialForm(
@@ -105,6 +109,7 @@ function buildInitialForm(
         brand === 'meta' ||
         brand === 'xai' ||
         isClaudeLikeBrand(brand) ||
+        isOpenAIRelayBrand(brand) ||
         brand === 'gemini' ||
         brand === 'interactions'
           ? ''
@@ -204,6 +209,7 @@ function buildInitialForm(
       brand === 'meta' ||
       brand === 'xai' ||
       isClaudeLikeBrand(brand) ||
+      isOpenAIRelayBrand(brand) ||
       brand === 'gemini' ||
       brand === 'interactions'
         ? ''
@@ -489,6 +495,7 @@ export function BaseProviderForm({
     brand === 'meta' ||
     brand === 'xai' ||
     isClaudeLikeBrand(brand) ||
+    isOpenAIRelayBrand(brand) ||
     brand === 'openaiCompatibility';
   const supportsModelImage = brand === 'openaiCompatibility';
   const singleConnectivity =
@@ -498,7 +505,9 @@ export function BaseProviderForm({
         ? { status: connectivity.geminiStatus, run: connectivity.runGemini }
         : isClaudeLikeBrand(brand)
           ? { status: connectivity.claudeStatus, run: connectivity.runClaude }
-          : null;
+          : isOpenAIRelayBrand(brand)
+            ? { status: connectivity.relayStatus, run: connectivity.runRelay }
+            : null;
 
   const updateModelEntry = (idx: number, patch: Partial<ModelEntryInput>) => {
     updateField(
@@ -683,6 +692,7 @@ export function BaseProviderForm({
               brand === 'meta' ||
               brand === 'xai' ||
               isClaudeLikeBrand(brand) ||
+              isOpenAIRelayBrand(brand) ||
               brand === 'gemini' ||
               brand === 'interactions' ? (
                 <span className={styles.labelHint}>
