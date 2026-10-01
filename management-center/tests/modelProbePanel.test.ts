@@ -48,7 +48,19 @@ describe('mergeProbeSummary', () => {
 
 describe('probe driver constants', () => {
   test('V1 drivers contained in the showcase set', () => {
-    for (const provider of ['cursor', 'kiro', 'cline', 'claude', 'codex', 'xai', 'devin', 'meta']) {
+    for (const provider of [
+      'cursor',
+      'kiro',
+      'cline',
+      'claude',
+      'codex',
+      'xai',
+      'devin',
+      'meta',
+      'mirasim',
+      'commandcode',
+      'opencode-go',
+    ]) {
       expect(PROBE_SUPPORTED_PROVIDERS.has(provider)).toBe(true);
     }
     expect(PROBE_SUPPORTED_PROVIDERS.has('gemini')).toBe(false);

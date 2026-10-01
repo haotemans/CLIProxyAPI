@@ -29,9 +29,10 @@ type executorFactory func(cfg *config.Config) RequestExecutor
 // executorFactories maps provider keys to probe-capable executor builders.
 // V1 drivers are executor-based (same translation path live traffic uses):
 // cursor (Connect/H2), kiro (EventStream), cline, claude, codex, xai, devin,
-// meta, mirasim (signed relay via the mirasim OAuth branch). Skipped
-// providers (gemini/antigravity/vertex/aistudio) are reported as unsupported
-// drivers.
+// meta, mirasim (signed relay via the mirasim OAuth branch), commandcode and
+// opencode-go (OpenAI chat-completions relays over the compat executor).
+// Skipped providers (gemini/antigravity/vertex/aistudio/interactions) are
+// reported as unsupported drivers.
 var executorFactories = map[string]executorFactory{
 	"cline":   func(cfg *config.Config) RequestExecutor { return executor.NewClineExecutor(cfg) },
 	"cursor":  func(cfg *config.Config) RequestExecutor { return executor.NewCursorExecutor(cfg) },
@@ -42,6 +43,12 @@ var executorFactories = map[string]executorFactory{
 	"devin":   func(cfg *config.Config) RequestExecutor { return executor.NewDevinExecutor(cfg) },
 	"meta":    func(cfg *config.Config) RequestExecutor { return executor.NewMetaExecutor(cfg) },
 	"mirasim": func(cfg *config.Config) RequestExecutor { return executor.NewMirasimExecutor(cfg) },
+	"commandcode": func(cfg *config.Config) RequestExecutor {
+		return executor.NewOpenAICompatExecutor("commandcode", cfg)
+	},
+	"opencode-go": func(cfg *config.Config) RequestExecutor {
+		return executor.NewOpenAICompatExecutor("opencode-go", cfg)
+	},
 }
 
 // SupportedProviders lists the V1 executor-driven probe drivers.

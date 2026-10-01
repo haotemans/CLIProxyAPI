@@ -10,6 +10,9 @@ export const PROBE_SUPPORTED_PROVIDERS = new Set([
   'xai',
   'devin',
   'meta',
+  'mirasim',
+  'commandcode',
+  'opencode-go',
 ]);
 
 export type ProbeRowByFile = Record<string, ModelProbeCredentialRow>;

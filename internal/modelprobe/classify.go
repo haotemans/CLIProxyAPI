@@ -28,6 +28,8 @@ var notAvailableMarkers = []string{
 	"not entitled",
 	"model access denied",
 	"insufficient credit for model",
+	"not listed for this key",
+	"key not authorized for model",
 }
 
 // authMarkers substrings that mean the credential itself was rejected.
@@ -82,7 +84,11 @@ func classifyProbeError(err error) Status {
 	case 401:
 		return StatusAuthError
 	case 403:
-		// permission_denied on the account
+		// permission_denied may be the tier gate phrased as model-deny; only
+		// account-level rejection counts as an auth error.
+		if isNotAvailableMessage(err) {
+			return StatusNotAvailable
+		}
 		return StatusAuthError
 	case 429:
 		return StatusLimited
