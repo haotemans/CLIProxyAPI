@@ -25,6 +25,7 @@ var notAvailableMarkers = []string{
 	"not included in your subscription",
 	"resource_not_found",
 	"permission denied for model",
+	"upstream error (permission_denied)",
 	"not entitled",
 	"model access denied",
 	"insufficient credit for model",

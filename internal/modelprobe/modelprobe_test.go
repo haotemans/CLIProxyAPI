@@ -36,6 +36,7 @@ func TestClassifyProbeError(t *testing.T) {
 		{"tier message", errors.New("model not enabled for your account"), StatusNotAvailable},
 		{"unknown model", errors.New("unknown model: gpt-9"), StatusNotAvailable},
 		{"tier gated", errors.New("requires pro plan upgrade"), StatusNotAvailable},
+		{"devin permission denied", errors.New("devin upstream error (permission_denied): an internal error occurred (trace ID: abc123)"), StatusNotAvailable},
 		{"rate limit", errors.New("rate limit exceeded"), StatusLimited},
 		{"quota", errors.New("insufficient user quota"), StatusLimited},
 		{"suspended", errors.New("account suspended"), StatusAuthError},
