@@ -44,6 +44,16 @@ export interface ModelProbeRunResponse {
   models?: ModelProbeRunModelRow[];
 }
 
+export interface ModelTestResponse {
+  ok?: boolean;
+  model?: string;
+  status?: string;
+  latency_ms?: number;
+  reply_text?: string;
+  error?: string;
+  usage?: { input?: number; output?: number };
+}
+
 export const modelProbeApi = {
   status: (signal?: AbortSignal): Promise<ModelProbeStatusResponse> =>
     apiClient.get<ModelProbeStatusResponse>('/model-probe/status', {
@@ -54,6 +64,13 @@ export const modelProbeApi = {
     apiClient.post<ModelProbeRunResponse>(
       '/model-probe/run',
       { auth_index: authIndex },
+      signal ? { signal } : undefined
+    ),
+
+  testModel: (authFile: string, model: string, signal?: AbortSignal): Promise<ModelTestResponse> =>
+    apiClient.post<ModelTestResponse>(
+      '/auth-files/test-model',
+      { auth_file: authFile, model },
       signal ? { signal } : undefined
     ),
 };

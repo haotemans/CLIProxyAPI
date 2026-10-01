@@ -423,7 +423,9 @@
     "probe_skipped": "Skipped: {{reason}}",
     "probe_never_next": "Not probed yet · next ~{{in}}",
     "probe_catalog": "catalog {{size}}",
-    "probe_provider_blocked_hint": "Cline is tightening third-party access (recurring phase)"
+    "probe_provider_blocked_hint": "Cline is tightening third-party access (recurring phase)",
+    "model_test_run": "Test",
+    "model_test_running": "Testing…"
   },
   "antigravity_subscription": {
     "plan_unknown": "Unknown",

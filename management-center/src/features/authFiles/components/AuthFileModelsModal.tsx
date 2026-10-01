@@ -1,9 +1,16 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { AuthFileModelItem } from '@/features/authFiles/constants';
 import { isModelExcluded } from '@/features/authFiles/constants';
+import { modelProbeApi } from '@/features/authFiles/modelProbe/api';
+import {
+  canTestModelProvider,
+  modelTestResultView,
+  type ModelTestOutcome,
+} from '@/features/authFiles/modelProbe/logic';
 import styles from './AuthFileModelsModal.module.scss';
 
 export type AuthFileModelsModalProps = {
@@ -21,6 +28,24 @@ export type AuthFileModelsModalProps = {
 export function AuthFileModelsModal(props: AuthFileModelsModalProps) {
   const { t } = useTranslation();
   const { open, fileName, fileType, loading, error, models, excluded, onClose, onCopyText } = props;
+
+  const [tests, setTests] = useState<Record<string, ModelTestOutcome>>({});
+  useEffect(() => {
+    setTests({});
+  }, [fileName, open]);
+
+  const canTest = canTestModelProvider(fileType);
+  const runTest = async (modelId: string) => {
+    if (!fileName || tests[modelId]?.state === 'running') return;
+    setTests((prev) => ({ ...prev, [modelId]: { state: 'running' } }));
+    try {
+      const response = await modelProbeApi.testModel(fileName, modelId);
+      setTests((prev) => ({ ...prev, [modelId]: { state: 'done', ...response } }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setTests((prev) => ({ ...prev, [modelId]: { state: 'done', ok: false, error: message } }));
+    }
+  };
 
   return (
     <Modal
@@ -55,6 +80,8 @@ export function AuthFileModelsModal(props: AuthFileModelsModalProps) {
         <div className={styles.list}>
           {models.map((model) => {
             const excludedModel = isModelExcluded(model.id, fileType, excluded);
+            const outcome = tests[model.id];
+            const result = modelTestResultView(outcome, t('auth_files.model_test_running'));
             return (
               <div
                 key={model.id}
@@ -75,9 +102,35 @@ export function AuthFileModelsModal(props: AuthFileModelsModalProps) {
                   <span className={styles.modelDisplayName}>{model.display_name}</span>
                 )}
                 {model.type && <span className={styles.modelType}>{model.type}</span>}
+                {canTest && (
+                  <button
+                    type="button"
+                    className={styles.testRun}
+                    disabled={outcome?.state === 'running'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void runTest(model.id);
+                    }}
+                  >
+                    {t('auth_files.model_test_run')}
+                  </button>
+                )}
                 {excludedModel && (
                   <span className={styles.excludedBadge}>
                     {t('auth_files.models_excluded_badge', { defaultValue: '已禁用' })}
+                  </span>
+                )}
+                {result && (
+                  <span
+                    className={`${styles.testResult} ${
+                      result.tone === 'ok'
+                        ? styles.testResultOk
+                        : result.tone === 'error'
+                          ? styles.testResultError
+                          : ''
+                    }`}
+                  >
+                    {result.text}
                   </span>
                 )}
               </div>

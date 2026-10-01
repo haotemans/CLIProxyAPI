@@ -161,3 +161,41 @@ export const splitProbeSummary = (
 
 const escapeProbeSentinel = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Whether the provider has a backend driver for the per-model test action. */
+export const canTestModelProvider = (provider: string | undefined | null): boolean =>
+  PROBE_SUPPORTED_PROVIDERS.has((provider ?? '').trim().toLowerCase());
+
+export interface ModelTestOutcome {
+  state: 'running' | 'done';
+  ok?: boolean;
+  status?: string;
+  error?: string;
+  reply_text?: string;
+  latency_ms?: number;
+}
+
+export interface ModelTestResultView {
+  tone: 'running' | 'ok' | 'error';
+  text: string;
+}
+
+/** Inline result line for one model row: muted running label, green reply +
+ * latency on success, red status/error otherwise. Null when never run. */
+export const modelTestResultView = (
+  outcome: ModelTestOutcome | undefined,
+  runningLabel: string
+): ModelTestResultView | null => {
+  if (!outcome) return null;
+  if (outcome.state === 'running') return { tone: 'running', text: runningLabel };
+  if (outcome.ok) {
+    const reply = (outcome.reply_text ?? '').trim() || '—';
+    const latency =
+      typeof outcome.latency_ms === 'number' && Number.isFinite(outcome.latency_ms)
+        ? ` · ${Math.round(outcome.latency_ms)} ms`
+        : '';
+    return { tone: 'ok', text: reply + latency };
+  }
+  const prefix = (outcome.status ?? '').trim() ? `${(outcome.status ?? '').trim()}: ` : '';
+  return { tone: 'error', text: prefix + (outcome.error ?? '').trim() };
+};

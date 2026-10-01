@@ -1,6 +1,6 @@
 @use '../../../styles/mixins' as *;
 
-/* 「支持的模型」弹窗：可点击复制的 mono 模型清单 */
+/* "Supported models" modal: click-to-copy mono model list */
 
 .list {
   display: flex;
@@ -77,6 +77,48 @@
   border-radius: $radius-full;
   padding: 1px 7px;
   white-space: nowrap;
+}
+
+.testRun {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--accent, #5b8dd9);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+    text-decoration: none;
+  }
+}
+
+.testRun + .excludedBadge {
+  margin-left: 0;
+}
+
+.testResult {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  color: var(--text-quaternary);
+  overflow-wrap: anywhere;
+}
+
+.testResultOk {
+  color: var(--success, #4caf7d);
+}
+
+.testResultError {
+  color: var(--danger, #d05f76);
 }
 
 @media (prefers-reduced-motion: reduce) {

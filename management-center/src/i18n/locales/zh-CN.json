@@ -421,7 +421,9 @@
     "probe_skipped": "已跳过:{{reason}}",
     "probe_never_next": "尚未探测 · 下次 ~{{in}}",
     "probe_catalog": "目录 {{size}}",
-    "probe_provider_blocked_hint": "Cline 正在收紧第三方访问（周期性）"
+    "probe_provider_blocked_hint": "Cline 正在收紧第三方访问（周期性）",
+    "model_test_run": "测试",
+    "model_test_running": "测试中…"
   },
   "antigravity_subscription": {
     "plan_unknown": "未知",
