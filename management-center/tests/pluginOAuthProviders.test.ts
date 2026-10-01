@@ -86,19 +86,13 @@ describe('plugin OAuth provider cards', () => {
     expect(cards[0].title).toBe('mirasim');
   });
 
-  test('mirasim gets the native brand override (title key, hint key, icon)', () => {
-    const cards = buildPluginOAuthProviderCards(
-      [pluginEntry({ metadata: { name: 'Mirasim Provider' } as PluginListEntry['metadata'] })],
-      '',
-      BUILTIN_IDS
-    );
-    expect(cards).toHaveLength(1);
-    const [card] = cards;
-    expect(PLUGIN_OAUTH_BRAND_OVERRIDES.mirasim.icon).toBeTruthy();
-    expect(card.titleKey).toBe('auth_login.mirasim_oauth_title');
-    expect(card.hintKey).toBe('auth_login.mirasim_oauth_hint');
-    // The brand icon wins over the plugin logo.
-    expect(card.icon).toBe(PLUGIN_OAUTH_BRAND_OVERRIDES.mirasim.icon);
+  test('mirasim is a builtin OAuth card (icon, title key); plugin override is empty', () => {
+    // Mirasim moved from the dynamic plugin merge into the static PROVIDERS
+    // list, so it no longer needs a brand override entry.
+    expect(Object.keys(PLUGIN_OAUTH_BRAND_OVERRIDES)).toHaveLength(0);
+    const source = readFileSync('src/pages/OAuthPage.tsx', 'utf8');
+    expect(source).toContain("id: 'mirasim'");
+    expect(source).toContain('iconMirasim');
     expect(readFileSync('src/assets/icons/mirasim.svg', 'utf8')).toContain('<svg');
   });
 
