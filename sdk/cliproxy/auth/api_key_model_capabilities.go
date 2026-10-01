@@ -401,6 +401,12 @@ func compileAPIKeyModelCapabilitiesForAuth(cfg *internalconfig.Config, auth *Aut
 		if entry := resolveOpencodeGoAPIKeyConfig(cfg, auth); entry != nil {
 			compileConfiguredModelCapabilities(out, entry.Models, "codex")
 		}
+	case "cline":
+		// Cline serves OpenAI chat completions with reasoning passthrough;
+		// capability resolution shares the codex model type.
+		if entry := resolveClineAPIKeyConfig(cfg, auth); entry != nil {
+			compileConfiguredModelCapabilities(out, entry.Models, "codex")
+		}
 	case "codex":
 		if entry := resolveCodexAPIKeyConfig(cfg, auth); entry != nil {
 			for i := range entry.Models {

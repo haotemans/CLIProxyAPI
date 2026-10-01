@@ -169,6 +169,12 @@ type Config struct {
 	// compatible) API key configurations. Base-url defaults to opencode.ai/zen/go.
 	OpencodeGoKey []OpencodeGoKey `yaml:"opencode-go-api-key" json:"opencode-go-api-key"`
 
+	// ClineKey defines a list of Cline account API key configurations (OpenAI
+	// chat-completions upstream at api.cline.bot). Chat completions require an
+	// API key from app.cline.bot -> Settings -> API Keys; the OAuth login keeps
+	// serving discovery and extension flows and stays a separate credential kind.
+	ClineKey []ClineKey `yaml:"cline-api-key" json:"cline-api-key"`
+
 	// ClaudeHeaderDefaults configures default header values for Claude API requests.
 	// These are used as fallbacks when the client does not send its own headers.
 	ClaudeHeaderDefaults ClaudeHeaderDefaults `yaml:"claude-header-defaults" json:"claude-header-defaults"`

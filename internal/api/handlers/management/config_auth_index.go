@@ -43,6 +43,11 @@ type commandcodeKeyWithAuthIndex struct {
 	AuthIndex string `json:"auth-index,omitempty"`
 }
 
+type clineKeyWithAuthIndex struct {
+	config.ClineKey
+	AuthIndex string `json:"auth-index,omitempty"`
+}
+
 type opencodeGoKeyWithAuthIndex struct {
 	config.OpencodeGoKey
 	AuthIndex string `json:"auth-index,omitempty"`
@@ -299,6 +304,39 @@ func (h *Handler) opencodeGoKeysWithAuthIndex() []opencodeGoKeyWithAuthIndex {
 		out[i] = opencodeGoKeyWithAuthIndex{
 			OpencodeGoKey: entry,
 			AuthIndex:     authIndex,
+		}
+	}
+	return out
+}
+
+func (h *Handler) clineKeysWithAuthIndex() []clineKeyWithAuthIndex {
+	if h == nil {
+		return nil
+	}
+	liveIndexByID := h.liveAuthIndexByID()
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.cfg == nil {
+		return nil
+	}
+
+	idGen := synthesizer.NewStableIDGenerator()
+	out := make([]clineKeyWithAuthIndex, len(h.cfg.ClineKey))
+	for i := range h.cfg.ClineKey {
+		entry := h.cfg.ClineKey[i]
+		authIndex := ""
+		key := strings.TrimSpace(entry.APIKey)
+		base := strings.TrimSpace(entry.BaseURL)
+		proxyURL := strings.TrimSpace(entry.ProxyURL)
+		prefix := strings.TrimSpace(entry.Prefix)
+		if key != "" || base != "" {
+			id, _ := idGen.Next("cline:apikey", key, base, proxyURL, prefix, config.FormatSortedHeaders(entry.Headers))
+			authIndex = liveIndexByID[id]
+		}
+		out[i] = clineKeyWithAuthIndex{
+			ClineKey:  entry,
+			AuthIndex: authIndex,
 		}
 	}
 	return out

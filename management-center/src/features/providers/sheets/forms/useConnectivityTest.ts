@@ -17,6 +17,13 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_ANTHROPIC_VERSION = '2023-06-01';
 const COMMANDCODE_DEFAULT_BASE_URL = 'https://api.commandcode.ai/provider/v1';
 const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1';
+const CLINE_DEFAULT_BASE_URL = 'https://api.cline.bot/api/v1';
+
+const RELAY_BRAND_DEFAULT_BASE: Partial<Record<ProviderBrand, string>> = {
+  commandcode: COMMANDCODE_DEFAULT_BASE_URL,
+  opencodeGo: OPENCODE_GO_DEFAULT_BASE_URL,
+  cline: CLINE_DEFAULT_BASE_URL,
+};
 
 export type ConnectivityState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -517,14 +524,13 @@ export function useConnectivityTest(
     }
   }, [apiKey, authIndex, baseUrl, brand, fallbackApiKey, formHeaders, messages, models, testModel]);
 
-  // Commandcode and OpenCode Go are OpenAI chat-completions relays: probe them
-  // with a single chat-completions POST, falling back to the public endpoint
-  // when base-url is empty (mirrors the backend default).
+  // Commandcode, OpenCode Go and Cline are OpenAI chat-completions relays:
+  // probe them with a single chat-completions POST, falling back to the
+  // public endpoint when base-url is empty (mirrors the backend default).
   const runRelay = useCallback(async (): Promise<void> => {
-    if (brand !== 'commandcode' && brand !== 'opencodeGo') return;
+    const defaultBase = RELAY_BRAND_DEFAULT_BASE[brand];
+    if (!defaultBase) return;
 
-    const defaultBase =
-      brand === 'commandcode' ? COMMANDCODE_DEFAULT_BASE_URL : OPENCODE_GO_DEFAULT_BASE_URL;
     const trimmedBase = baseUrl.trim() || defaultBase;
 
     const endpoint = buildOpenAIChatCompletionsEndpoint(trimmedBase);

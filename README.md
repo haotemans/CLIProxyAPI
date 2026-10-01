@@ -9,7 +9,7 @@ Personal fork of [router-for-me/CLIProxyAPI](https://github.com/router-for-me/CL
 - **Mirasim provider** — first-class `mirasim` provider in two credential flavors sharing one provider key: `api-keys.mirasim` for Anthropic-protocol reverse proxies (Bearer key, mandatory `base-url`, models fall back to the Claude catalog, alias mapping, thinking config, full Management API and panel support), and native **Mirasim OAuth** (ported from the MIT cpa-plugin-mirasim): `--mirasim-login` (loopback callback with paste fallback; `--mirasim-login-provider` / `--mirasim-login-email` / `--mirasim-login-code` variants), panel/TUI login via `/v0/management/mirasim-auth-url` with start/authorize/callback/email pages served on CPA's own port, signed relay protocol (mrs-sig-v2 + sealed metadata + device tickets), token refresh with plan change detection, signed `/v1/limits` quota lane, and per-account model probing.
 - **Commandcode provider** — first-class `commandcode` API-key provider for the Commandcode relay (OpenAI chat-completions at `https://api.commandcode.ai/provider/v1`, Bearer key, default base-url, built-in catalog `deepseek/deepseek-v4.1-flash` + `z-ai/glm-5.3-flash`, reasoning backfill from `reasoning`/`reasoning_details`, full Management API and panel support).
 - **OpenCode Go provider** — first-class `opencode-go` API-key provider for the OpenCode Zen Go relay (OpenAI chat-completions at `https://opencode.ai/zen/go/v1`, Bearer key, default base-url, built-in catalog `kimi-k3` / `glm-5.3` / `big-pickle` / `grok-code-fast-1`, full Management API and panel support).
-- **Cline provider** — first-class `cline` OAuth provider: WorkOS device-flow login (`--cline-login`, Management API, TUI), rotating token refresh, and **first-import model detection** so each account only advertises the models it can actually use (probed from `api.cline.bot`, persisted into the credential file).
+- **Cline provider** — first-class `cline` provider with two credential flavors sharing one executor: `api-keys.cline` for the account API keys Cline now requires for chat completions (`app.cline.bot` → Settings → API Keys; Bearer at `https://api.cline.bot/api/v1/chat/completions`, per-key model discovery via `GET .../ai/cline/models` with static-catalog fallback, full Management API and panel support), and the native OAuth login (`--cline-login`, WorkOS device flow, rotating refresh, first-import model detection) which keeps serving discovery and extension flows — OAuth session tokens no longer answer chat (upstream 401), so put an API key in config for inference.
 - **Cursor provider** — first-class `cursor` OAuth provider: PKCE URL-poll login (`--cursor-login`, Management API, TUI — no local callback, works headless), automatic token refresh, per-account model discovery via `GetUsableModels`, streaming + tool calling over Cursor's Connect/protobuf agent RPC.
 - **Kiro provider** — first-class `kiro` OAuth provider (AWS Kiro / CodeWhisperer): AWS Builder ID device-code login (`--kiro-login`, works headless), authorization-code login, IAM Identity Center login, Kiro IDE token import, dynamic per-account model discovery with `-agentic` variants, token refresh via SSO OIDC, and the full Connect EventStream executor with tool calling and thinking support.
 - **Native usage/cost accounting** — `usage-stats` in config (on by default) taps every completed request into a local pure-Go sqlite DB (`<auth-dir>/usage-stats.db`, 90-day retention) and exposes `GET /v0/management/usage-meters/summary`, `/usage-meters/series` (group by provider/model/credential/api-key/day) and `/usage-meters/events` (paginated per-request archive with filters); cost comes from upstream-reported spend when available, else token prices from `usage-stats.pricing` merged onto embedded defaults. Pricing is runtime-managed via `GET`/`PUT`/`DELETE /v0/management/usage-meters/pricing` plus `POST .../pricing/sync-litellm` (never clobbers user-set prices). `GET /v0/management/pool-inspection?provider=codex` grades every OAuth credential (disabled/quota/auth-error/probe signals → delete/relogin/rotate suggestions, read-only). All three are browsed natively in the panel (观测 → 用量统计 → 请求记录/定价 tabs; 认证文件 → 巡检). Kiro/Mirasim credentials additionally gain management-driven quota probes (`POST /v0/management/quota/fetch`) and quota lanes.
@@ -63,6 +63,17 @@ api-keys:
       base-url: "https://opencode.ai/zen/go/v1"
       keys:
         - api-key: "your-opencode-go-key"
+```
+
+Cline chat completions in `config.yaml` (API key from the Cline app; required since chat no longer answers OAuth session tokens):
+
+```yaml
+api-keys:
+  cline:
+    - name: cline-1
+      base-url: "https://api.cline.bot/api/v1"   # default; /chat/completions and /ai/cline/models join under it
+      keys:
+        - api-key: "cline-sk-..."                # app.cline.bot → Settings → API Keys
 ```
 
 The HTTP API listens on `server.port` (default 8317) with OpenAI `/v1/chat/completions`, Anthropic `/v1/messages`, and Gemini endpoints; authenticate with any key from `access.api-keys`.

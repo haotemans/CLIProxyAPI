@@ -339,6 +339,42 @@ func (cfg *Config) SanitizeOpencodeGoKeys() {
 	cfg.OpencodeGoKey = out
 }
 
+// clineDefaultBaseURL is the public Cline account API root. Chat completions
+// ({base}/chat/completions) and model discovery ({base}/ai/cline/models) are
+// joined against it, so it carries the /api/v1 path.
+const clineDefaultBaseURL = "https://api.cline.bot/api/v1"
+
+// SanitizeClineKeys normalizes Cline API key entries: the base URL defaults
+// to the public endpoint, and entries without an API key are dropped.
+// Chat completions require an account API key, so keeping an empty key would
+// only produce 401s. Claude-only fingerprint knobs do not apply.
+func (cfg *Config) SanitizeClineKeys() {
+	if cfg == nil || len(cfg.ClineKey) == 0 {
+		return
+	}
+	out := make([]ClineKey, 0, len(cfg.ClineKey))
+	for i := range cfg.ClineKey {
+		e := cfg.ClineKey[i]
+		e.APIKey = strings.TrimSpace(e.APIKey)
+		e.ProxyURL = strings.TrimSpace(e.ProxyURL)
+		e.Prefix = normalizeModelPrefix(e.Prefix)
+		e.BaseURL = strings.TrimSpace(e.BaseURL)
+		if e.BaseURL == "" {
+			e.BaseURL = clineDefaultBaseURL
+		}
+		e.Headers = NormalizeHeaders(e.Headers)
+		e.ExcludedModels = NormalizeExcludedModels(e.ExcludedModels)
+		e.Cloak = nil
+		e.FingerprintProfile = ""
+		e.ExperimentalCCHSigning = false
+		if e.APIKey == "" {
+			continue
+		}
+		out = append(out, e)
+	}
+	cfg.ClineKey = out
+}
+
 func sanitizeMetaKeyEntries(entries []MetaKey) []MetaKey {
 	if len(entries) == 0 {
 		return entries

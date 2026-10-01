@@ -659,6 +659,28 @@ requests:
 #         - api-key: "opencode-go-sk-..."
 #           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
 #
+#   # Cline account API keys
+#   # Cline chat completions require an account API key (create one in the
+#   # Cline app at app.cline.bot -> Settings -> API Keys). The OAuth login
+#   # (--cline-login) keeps serving model discovery and extension flows, but
+#   # chat now answers 401 without an API key — configure this family to route
+#   # chat traffic through the cline executor with a Bearer API key.
+#   # base-url defaults to https://api.cline.bot/api/v1; models advertised per
+#   # key come from GET {base-url}/ai/cline/models, falling back to the static
+#   # catalog when the query is unreachable (or to the models list below).
+#
+#   cline:
+#     - name: cline-1
+#       prefix: "cline" # optional: require calls like "cline/kimi-k3" to target this credential
+#       base-url: "https://api.cline.bot/api/v1" # optional: defaults to the public endpoint
+#       proxy-url: "socks5://proxy.example.com:1080" # optional: per-key proxy override
+#       models:
+#         - name: "moonshotai/kimi-k3" # upstream model name
+#           alias: "kimi-k3"           # client alias mapped to the upstream model
+#       keys:
+#         - api-key: "cline-sk-..." # API key from app.cline.bot -> Settings -> API Keys
+#           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
+#
 #   # xAI API keys
 #   # Uses the native xAI executor, including its Responses namespace-tool handling.
 #

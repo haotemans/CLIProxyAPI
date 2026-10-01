@@ -48,6 +48,8 @@ const MIRASIM_KEY_FIELDS = PROVIDER_COMMON_KEY_FIELDS;
 // Commandcode and OpenCode Go share the same relay key shape (common fields only).
 const COMMANDCODE_KEY_FIELDS = PROVIDER_COMMON_KEY_FIELDS;
 const OPENCODE_GO_KEY_FIELDS = PROVIDER_COMMON_KEY_FIELDS;
+// Cline account API keys have the same shape.
+const CLINE_KEY_FIELDS = PROVIDER_COMMON_KEY_FIELDS;
 const VERTEX_KEY_FIELDS = [
   'api-key',
   'priority',
@@ -649,6 +651,34 @@ export const providersApi = {
 
   deleteOpencodeGoConfig: (apiKey: string, baseUrl?: string) =>
     apiClient.delete(`/opencode-go-api-key${buildProviderDeleteQuery(apiKey, baseUrl)}`),
+
+  async getClineConfigs(): Promise<ProviderKeyConfig[]> {
+    const data = await apiClient.get('/cline-api-key');
+    const list = extractArrayPayload(data, 'cline-api-key');
+    return list
+      .map((item) => normalizeProviderKeyConfig(item))
+      .filter(Boolean) as ProviderKeyConfig[];
+  },
+
+  createClineConfig: (config: ProviderKeyConfig) =>
+    mutateLatestProviderList('cline-api-key', (latestItems) =>
+      appendLatestProviderRecord(latestItems, serializeProviderKey(config), (raw, payload) =>
+        mergeProviderKeyPayload(raw, payload, CLINE_KEY_FIELDS)
+      )
+    ),
+
+  updateClineConfig: (apiKey: string, baseUrl: string | undefined, config: ProviderKeyConfig) =>
+    mutateLatestProviderList('cline-api-key', (latestItems) =>
+      replaceLatestProviderRecord(
+        latestItems,
+        (record) => matchesProviderKey(record, apiKey, baseUrl),
+        serializeProviderKey(config),
+        (raw, payload) => mergeProviderKeyPayload(raw, payload, CLINE_KEY_FIELDS)
+      )
+    ),
+
+  deleteClineConfig: (apiKey: string, baseUrl?: string) =>
+    apiClient.delete(`/cline-api-key${buildProviderDeleteQuery(apiKey, baseUrl)}`),
 
   async getVertexConfigs(): Promise<ProviderKeyConfig[]> {
     const data = await apiClient.get('/vertex-api-key');

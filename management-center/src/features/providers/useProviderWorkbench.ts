@@ -17,6 +17,7 @@ import type {
 import {
   apiKeyFunToResource,
   claudeToResource,
+  clineToResource,
   codexToResource,
   commandcodeToResource,
   fennoAIToResource,
@@ -170,6 +171,7 @@ const buildProviderKeyConfig = (
     | 'mirasim'
     | 'commandcode'
     | 'opencodeGo'
+    | 'cline'
     | 'vertex',
   input: ProviderEntryFormInput,
   existing?: ProviderKeyConfig | GeminiKeyConfig | null
@@ -432,6 +434,11 @@ export const buildProviderGroups = (config: Config): ProviderGroup[] =>
       case 'opencodeGo':
         resources = (config.opencodeGoApiKeys ?? []).map((item, index) =>
           opencodeGoToResource(item, index)
+        );
+        break;
+      case 'cline':
+        resources = (config.clineApiKeys ?? []).map((item, index) =>
+          clineToResource(item, index)
         );
         break;
       case 'vertex':
@@ -702,6 +709,10 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
           await providersApi.createOpencodeGoConfig(
             buildProviderKeyConfig('opencodeGo', input) as ProviderKeyConfig
           );
+        } else if (brand === 'cline') {
+          await providersApi.createClineConfig(
+            buildProviderKeyConfig('cline', input) as ProviderKeyConfig
+          );
         } else if (brand === 'vertex') {
           await providersApi.createVertexConfig(
             buildProviderKeyConfig('vertex', input) as ProviderKeyConfig
@@ -793,6 +804,13 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
             selector.baseUrl,
             buildProviderKeyConfig('opencodeGo', input, existing) as ProviderKeyConfig
           );
+        } else if (brand === 'cline' && selector.brand === 'cline') {
+          const existing = resource.raw as ProviderKeyConfig;
+          await providersApi.updateClineConfig(
+            selector.apiKey,
+            selector.baseUrl,
+            buildProviderKeyConfig('cline', input, existing) as ProviderKeyConfig
+          );
         } else if (brand === 'vertex' && selector.brand === 'vertex') {
           const existing = resource.raw as ProviderKeyConfig;
           await providersApi.updateVertexConfig(
@@ -863,6 +881,10 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
           await providersApi.deleteOpencodeGoConfig(sel.apiKey, sel.baseUrl);
           const next = (config?.opencodeGoApiKeys ?? []).filter((_, i) => i !== sel.index);
           updateConfigValue('opencode-go-api-key', next);
+        } else if (sel.brand === 'cline') {
+          await providersApi.deleteClineConfig(sel.apiKey, sel.baseUrl);
+          const next = (config?.clineApiKeys ?? []).filter((_, i) => i !== sel.index);
+          updateConfigValue('cline-api-key', next);
         } else if (sel.brand === 'vertex') {
           await providersApi.deleteVertexConfig(sel.apiKey, sel.baseUrl);
           const next = (config?.vertexApiKeys ?? []).filter((_, i) => i !== sel.index);
@@ -938,6 +960,7 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
           (brand === 'mirasim' && selector.brand === 'mirasim') ||
           (brand === 'commandcode' && selector.brand === 'commandcode') ||
           (brand === 'opencodeGo' && selector.brand === 'opencodeGo') ||
+          (brand === 'cline' && selector.brand === 'cline') ||
           (brand === 'vertex' && selector.brand === 'vertex')
         ) {
           const current = resource.raw as ProviderKeyConfig;
@@ -959,6 +982,8 @@ export function useProviderWorkbench(): UseProviderWorkbenchResult {
             await providersApi.updateCommandcodeConfig(selector.apiKey, selector.baseUrl, next);
           } else if (selector.brand === 'opencodeGo') {
             await providersApi.updateOpencodeGoConfig(selector.apiKey, selector.baseUrl, next);
+          } else if (selector.brand === 'cline') {
+            await providersApi.updateClineConfig(selector.apiKey, selector.baseUrl, next);
           } else if (selector.brand === 'vertex') {
             await providersApi.updateVertexConfig(selector.apiKey, selector.baseUrl, next);
           }

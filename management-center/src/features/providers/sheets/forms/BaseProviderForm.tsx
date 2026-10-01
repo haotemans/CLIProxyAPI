@@ -73,10 +73,11 @@ const formatJsonObject = (value?: Record<string, unknown>): string => {
 // test-model and cooling behavior, but never the Claude-only cloak/fingerprint fields.
 const isClaudeLikeBrand = (brand: ProviderBrand): boolean =>
   brand === 'claude' || brand === 'mirasim';
-// Commandcode and OpenCode Go are OpenAI chat-completions relays with a default
-// public base-url; they share the relay connectivity probe and test-model behavior.
+// Commandcode, OpenCode Go and Cline are OpenAI chat-completions relays with a
+// default public base-url; they share the relay connectivity probe and
+// test-model behavior.
 const isOpenAIRelayBrand = (brand: ProviderBrand): boolean =>
-  brand === 'commandcode' || brand === 'opencodeGo';
+  brand === 'commandcode' || brand === 'opencodeGo' || brand === 'cline';
 const isClaudeBrand = (brand: ProviderBrand): boolean => brand === 'claude';
 
 function buildInitialForm(

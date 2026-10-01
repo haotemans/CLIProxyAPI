@@ -28,6 +28,7 @@ var v8KeyFamilies = []configPath{
 	{"mirasim-api-key", "mirasim"},
 	{"commandcode-api-key", "commandcode"},
 	{"opencode-go-api-key", "opencode-go"},
+	{"cline-api-key", "cline"},
 	{"openai-compatibility", "openai-compatibility"},
 }
 

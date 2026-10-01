@@ -406,6 +406,13 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
       .filter(Boolean) as ProviderKeyConfig[];
   }
 
+  const clineList = raw['cline-api-key'];
+  if (Array.isArray(clineList)) {
+    config.clineApiKeys = clineList
+      .map((item) => normalizeProviderKeyConfig(item))
+      .filter(Boolean) as ProviderKeyConfig[];
+  }
+
   const vertexList = raw['vertex-api-key'];
   if (Array.isArray(vertexList)) {
     config.vertexApiKeys = vertexList

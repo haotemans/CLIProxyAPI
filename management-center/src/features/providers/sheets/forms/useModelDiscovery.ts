@@ -15,6 +15,7 @@ export const MODEL_DISCOVERY_BRANDS: ReadonlyArray<ProviderBrand> = [
   'mirasim',
   'commandcode',
   'opencodeGo',
+  'cline',
   'openaiCompatibility',
 ];
 
@@ -84,6 +85,17 @@ export function useModelDiscovery(args: UseModelDiscoveryArgs): UseModelDiscover
             ? 'https://api.commandcode.ai/provider/v1'
             : 'https://opencode.ai/zen/go/v1');
         next = await modelsApi.fetchV1ModelsViaApiCall(
+          relayBase,
+          key,
+          baseHeaders,
+          resolvedAuthIndex
+        );
+      } else if (brand === 'cline') {
+        // Cline exposes GET {base-url}/ai/cline/models; an empty base-url
+        // falls back to the public account API (mirrors the backend default).
+        const key = (apiKey ?? '').trim() || (fallbackApiKey ?? '').trim();
+        const relayBase = baseUrl.trim() || 'https://api.cline.bot/api/v1';
+        next = await modelsApi.fetchClineModelsViaApiCall(
           relayBase,
           key,
           baseHeaders,

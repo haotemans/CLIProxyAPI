@@ -69,6 +69,7 @@ function providerKeyToResource(
     | 'mirasim'
     | 'commandcode'
     | 'opencodeGo'
+    | 'cline'
     | 'vertex',
   config: GeminiKeyConfig | ProviderKeyConfig,
   index: number
@@ -151,6 +152,10 @@ export function commandcodeToResource(config: ProviderKeyConfig, index: number):
 
 export function opencodeGoToResource(config: ProviderKeyConfig, index: number): ProviderResource {
   return providerKeyToResource('opencodeGo', config, index);
+}
+
+export function clineToResource(config: ProviderKeyConfig, index: number): ProviderResource {
+  return providerKeyToResource('cline', config, index);
 }
 
 export function vertexToResource(config: ProviderKeyConfig, index: number): ProviderResource {

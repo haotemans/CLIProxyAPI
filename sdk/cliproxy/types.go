@@ -71,6 +71,9 @@ type APIKeyClientResult struct {
 	// OpencodeGoKeyCount is the number of OpenCode Go relay API keys loaded
 	OpencodeGoKeyCount int
 
+	// ClineKeyCount is the number of Cline account API keys loaded
+	ClineKeyCount int
+
 	// CodexKeyCount is the number of Codex API keys loaded
 	CodexKeyCount int
 

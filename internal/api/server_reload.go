@@ -218,6 +218,7 @@ func (s *Server) UpdateClientsContext(ctx context.Context, cfg *config.Config) b
 	mirasimAPIKeyCount := len(cfg.MirasimKey)
 	commandcodeAPIKeyCount := len(cfg.CommandcodeKey)
 	opencodeGoAPIKeyCount := len(cfg.OpencodeGoKey)
+	clineAPIKeyCount := len(cfg.ClineKey)
 	codexAPIKeyCount := len(cfg.CodexKey)
 	xaiAPIKeyCount := len(cfg.XAIKey)
 	metaAPIKeyCount := len(cfg.MetaKey)
@@ -231,8 +232,8 @@ func (s *Server) UpdateClientsContext(ctx context.Context, cfg *config.Config) b
 		openAICompatCount += len(entry.APIKeyEntries)
 	}
 
-	total := authEntries + geminiAPIKeyCount + interactionsAPIKeyCount + claudeAPIKeyCount + mirasimAPIKeyCount + commandcodeAPIKeyCount + opencodeGoAPIKeyCount + codexAPIKeyCount + xaiAPIKeyCount + metaAPIKeyCount + vertexAICompatCount + openAICompatCount
-	fmt.Printf("server clients and configuration updated: %d clients (%d auth entries + %d Gemini API keys + %d Interactions API keys + %d Claude API keys + %d Mirasim API keys + %d Commandcode API keys + %d OpenCode Go API keys + %d Codex keys + %d xAI keys + %d Meta API keys + %d Vertex-compat + %d OpenAI-compat)\n",
+	total := authEntries + geminiAPIKeyCount + interactionsAPIKeyCount + claudeAPIKeyCount + mirasimAPIKeyCount + commandcodeAPIKeyCount + opencodeGoAPIKeyCount + clineAPIKeyCount + codexAPIKeyCount + xaiAPIKeyCount + metaAPIKeyCount + vertexAICompatCount + openAICompatCount
+	fmt.Printf("server clients and configuration updated: %d clients (%d auth entries + %d Gemini API keys + %d Interactions API keys + %d Claude API keys + %d Mirasim API keys + %d Commandcode API keys + %d OpenCode Go API keys + %d Cline keys + %d Codex keys + %d xAI keys + %d Meta API keys + %d Vertex-compat + %d OpenAI-compat)\n",
 		total,
 		authEntries,
 		geminiAPIKeyCount,
@@ -241,6 +242,7 @@ func (s *Server) UpdateClientsContext(ctx context.Context, cfg *config.Config) b
 		mirasimAPIKeyCount,
 		commandcodeAPIKeyCount,
 		opencodeGoAPIKeyCount,
+		clineAPIKeyCount,
 		codexAPIKeyCount,
 		xaiAPIKeyCount,
 		metaAPIKeyCount,

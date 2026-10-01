@@ -819,6 +819,15 @@ type OpencodeGoKey = ClaudeKey
 // OpencodeGoModel uses the Claude model mapping structure for OpenCode Go models.
 type OpencodeGoModel = ClaudeModel
 
+// ClineKey uses the Claude API key structure for Cline account API keys
+// (OpenAI chat-completions upstream at api.cline.bot/api/v1 + static Bearer
+// key from app.cline.bot Settings -> API Keys). The base URL defaults to the
+// public endpoint when omitted.
+type ClineKey = ClaudeKey
+
+// ClineModel uses the Claude model mapping structure for Cline models.
+type ClineModel = ClaudeModel
+
 // GeminiKey represents the configuration for a Gemini API key,
 // including optional overrides for upstream base URL, proxy routing, and headers.
 type GeminiKey struct {

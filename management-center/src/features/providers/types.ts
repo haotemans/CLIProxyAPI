@@ -15,6 +15,7 @@ export type ProviderBrand =
   | 'mirasim'
   | 'commandcode'
   | 'opencodeGo'
+  | 'cline'
   | 'vertex'
   | 'openaiCompatibility'
   | 'apikeyFun'
@@ -40,6 +41,7 @@ export type ProviderResourceSelector =
   | { brand: 'mirasim'; apiKey: string; baseUrl?: string; index: number }
   | { brand: 'commandcode'; apiKey: string; baseUrl?: string; index: number }
   | { brand: 'opencodeGo'; apiKey: string; baseUrl?: string; index: number }
+  | { brand: 'cline'; apiKey: string; baseUrl?: string; index: number }
   | { brand: 'vertex'; apiKey: string; baseUrl?: string; index: number }
   | { brand: 'openaiCompatibility'; name: string; index: number }
   | {

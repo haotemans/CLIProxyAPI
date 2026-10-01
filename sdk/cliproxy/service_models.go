@@ -220,11 +220,24 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 		}
 		models = applyExcludedModels(models, excluded)
 	case "cline":
-		// Prefer the per-account detected model catalog: only models the
-		// account can actually use are advertised. The static registry catalog
-		// remains the offline fallback until detection has happened (or if it
-		// returned nothing).
+		// Prefer a live/detected model catalog over the static registry list:
+		// api-keys.cline credentials discover through {base-url}/ai/cline/models
+		// (Bearer API key), OAuth credentials through the per-account detection
+		// persisted in metadata. The static registry catalog remains the
+		// fallback whenever the query is unreachable (or returned nothing).
 		models = registry.GetClineModels()
+		if authKind == "apikey" {
+			if discovered := s.discoverClineModels(ctx, a); len(discovered) > 0 {
+				models = buildClineDetectedModels(discovered)
+			} else if entry := s.resolveConfigClineKey(a); entry != nil {
+				// Config-listed models win over the static catalog (and the
+				// excluded list applies to api-key credentials only).
+				if len(entry.Models) > 0 {
+					models = buildConfigModels(entry.Models, "cline", "codex", "codex")
+				}
+				excluded = entry.ExcludedModels
+			}
+		}
 		if detected := clineauth.ModelsFromMetadata(a.Metadata); len(detected) > 0 {
 			models = buildClineDetectedModels(detected)
 		}
@@ -482,6 +495,15 @@ func (s *Service) resolveConfigOpencodeGoKey(auth *coreauth.Auth) *config.Openco
 		return nil
 	}
 	return resolveConfigClaudeStyleKey(auth, s.cfg.OpencodeGoKey)
+}
+
+// resolveConfigClineKey locates the Cline config entry backing an auth.
+// ClineKey reuses the ClaudeKey structure, so the same lookup rules apply.
+func (s *Service) resolveConfigClineKey(auth *coreauth.Auth) *config.ClineKey {
+	if s == nil || s.cfg == nil {
+		return nil
+	}
+	return resolveConfigClaudeStyleKey(auth, s.cfg.ClineKey)
 }
 
 func resolveConfigClaudeStyleKey(auth *coreauth.Auth, entries []config.ClaudeKey) *config.ClaudeKey {

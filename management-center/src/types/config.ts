@@ -32,6 +32,7 @@ export interface Config {
   mirasimApiKeys?: ProviderKeyConfig[];
   commandcodeApiKeys?: ProviderKeyConfig[];
   opencodeGoApiKeys?: ProviderKeyConfig[];
+  clineApiKeys?: ProviderKeyConfig[];
   vertexApiKeys?: ProviderKeyConfig[];
   openaiCompatibility?: OpenAIProviderConfig[];
   oauthExcludedModels?: Record<string, string[]>;
@@ -59,6 +60,7 @@ export type RawConfigSection =
   | 'mirasim-api-key'
   | 'commandcode-api-key'
   | 'opencode-go-api-key'
+  | 'cline-api-key'
   | 'vertex-api-key'
   | 'openai-compatibility'
   | 'oauth-excluded-models';

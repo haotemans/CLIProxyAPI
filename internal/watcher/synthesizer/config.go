@@ -54,6 +54,8 @@ func (s *ConfigSynthesizer) Synthesize(ctx *SynthesisContext) ([]*coreauth.Auth,
 	out = append(out, s.synthesizeCommandcodeKeys(ctx)...)
 	// OpenCode Go API Keys
 	out = append(out, s.synthesizeOpencodeGoKeys(ctx)...)
+	// Cline API Keys
+	out = append(out, s.synthesizeClineKeys(ctx)...)
 	// Codex API Keys
 	out = append(out, s.synthesizeCodexKeys(ctx)...)
 	// xAI API Keys
@@ -383,6 +385,66 @@ func (s *ConfigSynthesizer) synthesizeOpencodeGoKeys(ctx *SynthesisContext) []*c
 			UpdatedAt:  now,
 		}
 		ApplyAuthExcludedModelsMeta(a, cfg, mk.ExcludedModels, "apikey")
+		if len(a.Metadata) == 0 {
+			a.Metadata = nil
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// synthesizeClineKeys creates Auth entries for Cline API keys. The upstream
+// speaks OpenAI chat completions with a static Bearer key; the base URL
+// defaults to the public account API (sanitizer already filled it).
+func (s *ConfigSynthesizer) synthesizeClineKeys(ctx *SynthesisContext) []*coreauth.Auth {
+	cfg := ctx.Config
+	now := ctx.Now
+	idGen := ctx.IDGenerator
+
+	out := make([]*coreauth.Auth, 0, len(cfg.ClineKey))
+	for i := range cfg.ClineKey {
+		ck := cfg.ClineKey[i]
+		key := strings.TrimSpace(ck.APIKey)
+		base := strings.TrimSpace(ck.BaseURL)
+		if key == "" || base == "" {
+			continue
+		}
+		prefix := strings.TrimSpace(ck.Prefix)
+		proxyURL := strings.TrimSpace(ck.ProxyURL)
+		id, token := idGen.Next("cline:apikey", key, base, proxyURL, prefix, config.FormatSortedHeaders(ck.Headers))
+		attrs := map[string]string{
+			"source":       fmt.Sprintf("config:cline[%s]", token),
+			"config_index": strconv.Itoa(i),
+			"api_key":      key,
+			"base_url":     base,
+		}
+		metadata := map[string]any{}
+		if ck.DisableCooling != nil {
+			metadata["disable_cooling"] = *ck.DisableCooling
+		}
+		addRequestRetryToMetadata(ck.RequestRetry, metadata)
+		addRequestScopedErrorsToMetadata(ck.RequestScopedErrors, metadata)
+		if ck.Priority != 0 {
+			attrs["priority"] = strconv.Itoa(ck.Priority)
+		}
+		addWeightToAttrs(ck.Weight, attrs)
+		if hash := diff.ComputeClaudeModelsHash(ck.Models); hash != "" {
+			attrs["models_hash"] = hash
+		}
+		addConfigHeadersToAttrs(ck.Headers, attrs)
+		a := &coreauth.Auth{
+			ID:         id,
+			Provider:   "cline",
+			Label:      "cline-apikey",
+			Prefix:     prefix,
+			Status:     coreauth.StatusActive,
+			ProxyURL:   proxyURL,
+			Attributes: attrs,
+			Metadata:   metadata,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}
+		ApplyAuthExcludedModelsMeta(a, cfg, ck.ExcludedModels, "apikey")
 		if len(a.Metadata) == 0 {
 			a.Metadata = nil
 		}

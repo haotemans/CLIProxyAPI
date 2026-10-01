@@ -472,6 +472,10 @@ func configuredModelAliasEntries(cfg *internalconfig.Config, auth *Auth) []model
 		if entry := resolveOpencodeGoAPIKeyConfig(cfg, auth); entry != nil {
 			models = asModelAliasEntries(entry.Models)
 		}
+	case "cline":
+		if entry := resolveClineAPIKeyConfig(cfg, auth); entry != nil {
+			models = asModelAliasEntries(entry.Models)
+		}
 	case "codex":
 		if entry := resolveCodexAPIKeyConfig(cfg, auth); entry != nil {
 			models = asModelAliasEntries(entry.Models)
@@ -644,6 +648,10 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
 			if entry := resolveOpencodeGoAPIKeyConfig(cfg, auth); entry != nil {
 				compileAPIKeyModelAliasForModels(byAlias, entry.Models)
 			}
+		case "cline":
+			if entry := resolveClineAPIKeyConfig(cfg, auth); entry != nil {
+				compileAPIKeyModelAliasForModels(byAlias, entry.Models)
+			}
 		case "codex":
 			if entry := resolveCodexAPIKeyConfig(cfg, auth); entry != nil {
 				compileAPIKeyModelAliasForModels(byAlias, entry.Models)
@@ -780,6 +788,8 @@ func (m *Manager) applyAPIKeyModelAliasWithRouting(routing *apiKeyModelRoutingSn
 		upstreamModel = resolveUpstreamModelForCommandcodeAPIKey(cfg, auth, requestedModel)
 	case "opencode-go":
 		upstreamModel = resolveUpstreamModelForOpencodeGoAPIKey(cfg, auth, requestedModel)
+	case "cline":
+		upstreamModel = resolveUpstreamModelForClineAPIKey(cfg, auth, requestedModel)
 	case "codex":
 		upstreamModel = resolveUpstreamModelForCodexAPIKey(cfg, auth, requestedModel)
 	case "xai":
@@ -895,6 +905,13 @@ func resolveOpencodeGoAPIKeyConfig(cfg *internalconfig.Config, auth *Auth) *inte
 	return resolveAPIKeyConfig(cfg.OpencodeGoKey, auth)
 }
 
+func resolveClineAPIKeyConfig(cfg *internalconfig.Config, auth *Auth) *internalconfig.ClineKey {
+	if cfg == nil {
+		return nil
+	}
+	return resolveAPIKeyConfig(cfg.ClineKey, auth)
+}
+
 func resolveCodexAPIKeyConfig(cfg *internalconfig.Config, auth *Auth) *internalconfig.CodexKey {
 	if cfg == nil {
 		return nil
@@ -965,6 +982,14 @@ func resolveUpstreamModelForCommandcodeAPIKey(cfg *internalconfig.Config, auth *
 
 func resolveUpstreamModelForOpencodeGoAPIKey(cfg *internalconfig.Config, auth *Auth, requestedModel string) string {
 	entry := resolveOpencodeGoAPIKeyConfig(cfg, auth)
+	if entry == nil {
+		return ""
+	}
+	return resolveModelAliasFromConfigModels(requestedModel, asModelAliasEntries(entry.Models))
+}
+
+func resolveUpstreamModelForClineAPIKey(cfg *internalconfig.Config, auth *Auth, requestedModel string) string {
+	entry := resolveClineAPIKeyConfig(cfg, auth)
 	if entry == nil {
 		return ""
 	}

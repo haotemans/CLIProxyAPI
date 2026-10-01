@@ -200,6 +200,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	// Sanitize OpenCode Go keys: default the base-url when omitted
 	cfg.SanitizeOpencodeGoKeys()
 
+	// Sanitize Cline keys: default the base-url when omitted
+	cfg.SanitizeClineKeys()
+
 	// Sanitize OpenAI compatibility providers: drop entries without base-url
 	cfg.SanitizeOpenAICompatibility()
 

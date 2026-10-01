@@ -133,6 +133,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         case 'opencode-go-api-key':
           nextConfig.opencodeGoApiKeys = value as Config['opencodeGoApiKeys'];
           break;
+        case 'cline-api-key':
+          nextConfig.clineApiKeys = value as Config['clineApiKeys'];
+          break;
         case 'vertex-api-key':
           nextConfig.vertexApiKeys = value as Config['vertexApiKeys'];
           break;

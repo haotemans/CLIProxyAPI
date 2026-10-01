@@ -40,6 +40,10 @@ type CommandcodeModel = internalconfig.CommandcodeModel
 // OpencodeGoKey/OpencodeGoModel alias the OpenCode Go relay entries.
 type OpencodeGoKey = internalconfig.OpencodeGoKey
 type OpencodeGoModel = internalconfig.OpencodeGoModel
+
+// ClineKey/ClineModel alias the Cline account API key entries.
+type ClineKey = internalconfig.ClineKey
+type ClineModel = internalconfig.ClineModel
 type VertexCompatKey = internalconfig.VertexCompatKey
 type VertexCompatModel = internalconfig.VertexCompatModel
 type OpenAICompatibility = internalconfig.OpenAICompatibility

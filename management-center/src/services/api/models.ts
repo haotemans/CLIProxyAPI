@@ -3,7 +3,7 @@
  */
 
 import axios from 'axios';
-import { normalizeModelList } from '@/utils/models';
+import { normalizeModelList, type ModelInfo } from '@/utils/models';
 import { normalizeApiBase } from '@/utils/connection';
 import { apiCallApi, getApiCallErrorMessage } from './apiCall';
 import { isRecord } from '@/utils/helpers';
@@ -179,6 +179,45 @@ export const modelsApi = {
   },
 
   /**
+   * Fetch models from Cline's /ai/cline/models endpoint via api-call (Bearer API key).
+   * Handles the bare-array, {"data":[...]} envelope and bucketed object shapes.
+   */
+  async fetchClineModelsViaApiCall(
+    baseUrl: string,
+    apiKey?: string,
+    headers: Record<string, string> = {},
+    authIndex?: string
+  ) {
+    const trimmedBase = String(baseUrl ?? '').trim().replace(/\/+$/, '');
+    if (!trimmedBase) {
+      throw new Error('Invalid base url');
+    }
+    const endpoint = `${trimmedBase}/ai/cline/models`;
+
+    const trimmedAuthIndex = authIndex?.trim() || undefined;
+    const resolvedHeaders = { ...headers };
+    if (apiKey && !hasHeader(resolvedHeaders, 'authorization')) {
+      resolvedHeaders.Authorization = `Bearer ${apiKey}`;
+    } else if (trimmedAuthIndex && !hasHeader(resolvedHeaders, 'authorization')) {
+      resolvedHeaders.Authorization = 'Bearer $TOKEN$';
+    }
+
+    const result = await apiCallApi.request({
+      authIndex: trimmedAuthIndex,
+      method: 'GET',
+      url: endpoint,
+      header: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined,
+    });
+
+    if (result.statusCode < 200 || result.statusCode >= 300) {
+      throw new Error(getApiCallErrorMessage(result));
+    }
+
+    const payload = result.body ?? result.bodyText;
+    return normalizeClineModelPayload(payload, { dedupe: true });
+  },
+
+  /**
    * Fetch Claude models from /v1/models via api-call.
    * Anthropic requires `x-api-key` and `anthropic-version` headers.
    */
@@ -322,3 +361,39 @@ export const modelsApi = {
     }
   },
 };
+
+/**
+ * normalizeClineModelPayload parses the Cline /ai/cline/models response:
+ * a bare array of entries, a {"data":[...]} envelope, or a bucketed object
+ * ({recommended:[...], free:[...], clinePass:[...], ...}) whose arrays are
+ * merged and deduplicated by model id, preserving first-seen order.
+ */
+export function normalizeClineModelPayload(
+  payload: unknown,
+  { dedupe = false } = {}
+): ModelInfo[] {
+  if (Array.isArray(payload)) {
+    return normalizeModelList(payload, { dedupe });
+  }
+  if (isRecord(payload)) {
+    if (Array.isArray(payload.data)) {
+      return normalizeModelList(payload.data, { dedupe });
+    }
+    const merged: unknown[] = [];
+    const seen = new Set<string>();
+    for (const value of Object.values(payload)) {
+      if (!Array.isArray(value)) continue;
+      for (const model of normalizeModelList(value)) {
+        const id = String(model?.name ?? '').trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        merged.push(model);
+      }
+    }
+    if (merged.length > 0) {
+      return normalizeModelList(merged, { dedupe });
+    }
+  }
+  return [];
+}
+

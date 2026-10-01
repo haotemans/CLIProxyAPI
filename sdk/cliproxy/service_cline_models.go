@@ -2,11 +2,15 @@ package cliproxy
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"strings"
+	"time"
 
 	clineauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/cline"
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v8/sdk/auth"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -113,4 +117,76 @@ func metadataValue(auth *coreauth.Auth, key string) string {
 		return strings.TrimSpace(v)
 	}
 	return ""
+}
+
+// clineModelFetchTimeout bounds the per-key model discovery request.
+const clineModelFetchTimeout = 15 * time.Second
+
+// discoverClineModels fetches the models available to an api-keys.cline
+// credential through {base-url}/ai/cline/models (Bearer API key). It returns
+// nil when the query is unreachable or empty; callers then fall back to the
+// configured models or the static registry catalog.
+func (s *Service) discoverClineModels(ctx context.Context, a *coreauth.Auth) []clineauth.ClineModelInfo {
+	if s == nil || a == nil {
+		return nil
+	}
+	baseURL := strings.TrimSpace(a.Attributes["base_url"])
+	apiKey := strings.TrimSpace(a.Attributes["api_key"])
+	if baseURL == "" || apiKey == "" {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	fetchCtx, cancel := context.WithTimeout(ctx, clineModelFetchTimeout)
+	defer cancel()
+
+	proxyURL := strings.TrimSpace(a.ProxyURL)
+	if proxyURL == "" && s.cfg != nil {
+		proxyURL = strings.TrimSpace(s.cfg.ProxyURL)
+	}
+	transport, _, err := proxyutil.BuildHTTPTransport(proxyURL)
+	if err != nil {
+		log.Warnf("cline: failed to build model discovery transport: %v", err)
+		return nil
+	}
+	client := &http.Client{}
+	if transport != nil {
+		client.Transport = transport
+		defer transport.CloseIdleConnections()
+	}
+
+	endpoint := strings.TrimSuffix(baseURL, "/") + "/ai/cline/models"
+	req, err := http.NewRequestWithContext(fetchCtx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		log.Warnf("cline: failed to build model discovery request: %v", err)
+		return nil
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Warnf("cline: model discovery request failed: %v", err)
+		return nil
+	}
+	defer func() {
+		if errClose := resp.Body.Close(); errClose != nil {
+			log.Errorf("cline: model discovery close body error: %v", errClose)
+		}
+	}()
+	if resp.StatusCode != http.StatusOK {
+		log.Debugf("cline: model discovery returned status %d, using fallback catalog", resp.StatusCode)
+		return nil
+	}
+	raw, errRead := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if errRead != nil {
+		return nil
+	}
+	models, errParse := clineauth.ParseClineModels(raw)
+	if errParse != nil || len(models) == 0 {
+		return nil
+	}
+	log.Infof("cline: discovered %d models for api key via %s", len(models), baseURL)
+	return models
 }

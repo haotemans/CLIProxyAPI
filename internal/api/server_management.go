@@ -171,6 +171,11 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.PATCH("/opencode-go-api-key", s.mgmt.PatchOpencodeGoKey)
 		mgmt.DELETE("/opencode-go-api-key", s.mgmt.DeleteOpencodeGoKey)
 
+		mgmt.GET("/cline-api-key", s.mgmt.GetClineKeys)
+		mgmt.PUT("/cline-api-key", s.mgmt.PutClineKeys)
+		mgmt.PATCH("/cline-api-key", s.mgmt.PatchClineKey)
+		mgmt.DELETE("/cline-api-key", s.mgmt.DeleteClineKey)
+
 		mgmt.GET("/codex-api-key", s.mgmt.GetCodexKeys)
 		mgmt.PUT("/codex-api-key", s.mgmt.PutCodexKeys)
 		mgmt.PATCH("/codex-api-key", s.mgmt.PatchCodexKey)

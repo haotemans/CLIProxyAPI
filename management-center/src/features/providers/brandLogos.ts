@@ -2,6 +2,7 @@ import claudeLogo from '@/assets/icons/claude.svg';
 import mirasimLogo from '@/assets/icons/mirasim.svg';
 import commandcodeLogo from '@/assets/icons/commandcode.svg';
 import opencodeGoLogo from '@/assets/icons/opencode-go.svg';
+import clineLogo from '@/assets/icons/cline.svg';
 import codexLogo from '@/assets/icons/codex.svg';
 import metaLogo from '@/assets/icons/meta.svg';
 import devinLightLogo from '@/assets/icons/devin.svg';
@@ -36,6 +37,7 @@ export const PROVIDER_LOGOS: Record<ProviderBrandLogoKey, ProviderBrandLogo> = {
   mirasim: { src: mirasimLogo },
   commandcode: { src: commandcodeLogo },
   opencodeGo: { src: opencodeGoLogo },
+  cline: { src: clineLogo },
   codex: { src: codexLogo },
   meta: { src: metaLogo, transparent: true },
   devin: { src: devinLightLogo, darkSrc: devinDarkLogo, transparent: true },
