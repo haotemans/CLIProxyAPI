@@ -423,7 +423,8 @@
     "probe_catalog": "目錄 {{size}}",
     "probe_provider_blocked_hint": "Cline 正在收緊第三方訪問（週期性）",
     "model_test_run": "測試",
-    "model_test_running": "測試中…"
+    "model_test_running": "測試中…",
+    "models_free_badge": "免費"
   },
   "antigravity_subscription": {
     "plan_unknown": "未知",
@@ -1835,6 +1836,7 @@
       "name": "名稱",
       "apiKey": "API 金鑰",
       "apiKeyCreatePlaceholder": "輸入 API 金鑰",
+      "opencodeGoPublicFreeHint": "金鑰 \"public\" 將啟用 OpenCode Zen 匿名免費層：僅限 *-free 模型，價格為 0；可用集合動態變化，請在認證檔案頁執行探測查看實際可用。",
       "apiKeyEditPlaceholder": "留空表示不修改",
       "baseUrl": "服務位址",
       "baseUrlRequiredHint": "此提供商需要填寫服務位址",

@@ -425,7 +425,8 @@
     "probe_catalog": "catalog {{size}}",
     "probe_provider_blocked_hint": "Cline is tightening third-party access (recurring phase)",
     "model_test_run": "Test",
-    "model_test_running": "Testing…"
+    "model_test_running": "Testing…",
+    "models_free_badge": "free"
   },
   "antigravity_subscription": {
     "plan_unknown": "Unknown",
@@ -1811,6 +1812,7 @@
       "name": "Name",
       "apiKey": "API key",
       "apiKeyCreatePlaceholder": "Enter API key",
+      "opencodeGoPublicFreeHint": "The key \"public\" enables the anonymous OpenCode Zen free tier: *-free models only, priced 0; the usable set is dynamic — run the probe on the auth files page to see what works.",
       "apiKeyEditPlaceholder": "Leave empty to keep unchanged",
       "baseUrl": "Base URL",
       "baseUrlRequiredHint": "Required for this provider",

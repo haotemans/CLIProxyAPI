@@ -428,7 +428,8 @@
     "probe_catalog": "каталог {{size}}",
     "probe_provider_blocked_hint": "Cline ужесточает сторонний доступ (периодически)",
     "model_test_run": "Тест",
-    "model_test_running": "Проверка…"
+    "model_test_running": "Проверка…",
+    "models_free_badge": "бесплатно"
   },
   "antigravity_subscription": {
     "plan_unknown": "Неизвестно",
@@ -1805,6 +1806,7 @@
       "name": "Название",
       "apiKey": "API-ключ",
       "apiKeyCreatePlaceholder": "Введите API-ключ",
+      "opencodeGoPublicFreeHint": "Ключ \"public\" включает анонимный бесплатный уровень OpenCode Zen: только *-free модели, цена 0; доступный набор динамический — проверяйте пробником на странице файлов аутентификации.",
       "apiKeyEditPlaceholder": "Оставьте пустым, чтобы не менять",
       "baseUrl": "Base URL",
       "baseUrlRequiredHint": "Обязательно для этого провайдера",

@@ -556,13 +556,19 @@ export const authFilesApi = {
   // 获取认证凭证支持的模型
   async getModelsForAuthFile(
     name: string
-  ): Promise<{ id: string; display_name?: string; type?: string; owned_by?: string }[]> {
+  ): Promise<{ id: string; display_name?: string; type?: string; owned_by?: string; free?: boolean }[]> {
     const data = await apiClient.get<Record<string, unknown>>(
       `/auth-files/models?name=${encodeURIComponent(name)}`
     );
     const models = data.models ?? data['models'];
     return Array.isArray(models)
-      ? (models as { id: string; display_name?: string; type?: string; owned_by?: string }[])
+      ? (models as {
+          id: string;
+          display_name?: string;
+          type?: string;
+          owned_by?: string;
+          free?: boolean;
+        }[])
       : [];
   },
 

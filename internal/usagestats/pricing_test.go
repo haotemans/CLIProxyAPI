@@ -61,3 +61,37 @@ func TestPricerCustomOverridesWin(t *testing.T) {
 		t.Fatalf("UpdateOverrides refresh = %+v", price)
 	}
 }
+
+func TestPricerZenFreeZeroPrices(t *testing.T) {
+	t.Cleanup(func() { RegisterZenFreeModelPrices(nil) })
+	p := NewPricer(nil)
+
+	RegisterZenFreeModelPrices([]string{"space-bunny-free", "deepseek-v4-flash-free"})
+	price, ok := p.PriceFor("space-bunny-free")
+	if !ok || price.Input != 0 || price.Output != 0 {
+		t.Fatalf("zen free model price = %+v ok=%v, want exact zero", price, ok)
+	}
+	if !IsZeroPricedModel("Space-Bunny-FREE") {
+		t.Fatal("zero-priced lookup must normalize case")
+	}
+	if !ok {
+		t.Fatal("registered id must resolve")
+	}
+	// Unrelated prefixes keep resolving from defaults.
+	if price, okDefault := p.PriceFor("claude-sonnet-4-5"); !okDefault || price.Input != 3 {
+		t.Fatalf("defaults still resolve: %+v ok=%v", price, okDefault)
+	}
+	// A user override beats the zero-priced free set.
+	custom := NewPricer(map[string]Price{"deepseek-v4-flash-free": {Input: 1, Output: 2}})
+	if price, okCustom := custom.PriceFor("deepseek-v4-flash-free"); !okCustom || price.Input != 1 {
+		t.Fatalf("user override must win over free zero: %+v ok=%v", price, okCustom)
+	}
+	// Re-sync with a shrunk feed drops the vanished id back to unpaid/no price.
+	RegisterZenFreeModelPrices([]string{"mimo-v2.5-free"})
+	if IsZeroPricedModel("space-bunny-free") {
+		t.Fatal("vanished feed id must leave the zero-priced set")
+	}
+	if _, okGone := p.PriceFor("space-bunny-free"); okGone {
+		t.Fatal("vanished id must not resolve a price anymore")
+	}
+}

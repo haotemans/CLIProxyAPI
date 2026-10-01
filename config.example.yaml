@@ -647,6 +647,18 @@ requests:
 #   # When models is omitted, the built-in OpenCode Go catalog is advertised
 #   # (kimi-k3, glm-5.3, big-pickle, grok-code-fast-1).
 #
+#   # Anonymous Zen free tier: the literal key "public" (exact, case-sensitive)
+#   # selects OpenCode Zen's anonymous free tier — no account needed. The entry
+#   # binds https://opencode.ai/zen/v1 (an explicit base-url still wins, so keep
+#   # the free key in its own group without base-url) and advertises exactly the
+#   # *-free models from the zen catalog (synced on every model refresh; ids
+#   # priced 0, vanished ids dropped, last-good cache kept on fetch failure).
+#   # Per-model availability is dynamic: the free tier answers some models with
+#   # a FreeTierError (only callable from within the OpenCode app — pruned by
+#   # the probe) and may deny capacity with "Model is unavailable" (kept, retried
+#   # next cycle). Run the built-in probe on the management auth files page to
+#   # see what actually works right now.
+#
 #   opencode-go:
 #     - name: opencode-go-1
 #       prefix: "opencode-go" # optional: require calls like "opencode-go/kimi-k3" to target this credential
@@ -658,6 +670,9 @@ requests:
 #       keys:
 #         - api-key: "opencode-go-sk-..."
 #           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
+#     - name: opencode-go-free
+#       keys:
+#         - api-key: "public" # anonymous Zen free tier; base-url defaults to https://opencode.ai/zen/v1
 #
 #   # Cline account API keys
 #   # Cline chat completions require an account API key (create one in the

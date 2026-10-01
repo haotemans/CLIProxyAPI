@@ -110,7 +110,8 @@ func normalizePattern(pattern string) string {
 }
 
 // PriceFor returns the USD-per-1M price for a model identifier, preferring
-// the longest custom prefix, then the longest default prefix.
+// the longest custom prefix, then exact zero-priced dynamic free-tier ids,
+// then the longest default prefix.
 func (p *Pricer) PriceFor(model string) (Price, bool) {
 	model = normalizePattern(model)
 	if model == "" {
@@ -121,7 +122,41 @@ func (p *Pricer) PriceFor(model string) (Price, bool) {
 	if price, ok := longestPrefixPrice(p.custom, model); ok {
 		return price, true
 	}
+	if IsZeroPricedModel(model) {
+		return Price{}, true
+	}
 	return longestPrefixPrice(defaultPrices, model)
+}
+
+// zeroPricedModels holds exact ids currently priced at {0,0} by a dynamic
+// free tier (e.g. OpenCode Zen anonymous *-free models). Successful syncs
+// replace the set wholesale; failed syncs keep the last good snapshot.
+var zeroPriced = struct {
+	sync.RWMutex
+	ids map[string]struct{}
+}{ids: map[string]struct{}{}}
+
+// RegisterZenFreeModelPrices replaces the zero-priced exact-id table with the
+// freshly synced ids (USD 0 per 1M tokens, input and output).
+func RegisterZenFreeModelPrices(ids []string) {
+	fresh := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if key := normalizePattern(id); key != "" {
+			fresh[key] = struct{}{}
+		}
+	}
+	zeroPriced.Lock()
+	zeroPriced.ids = fresh
+	zeroPriced.Unlock()
+}
+
+// IsZeroPricedModel reports whether the exact id is registered as a dynamic
+// free-tier model priced at {0,0}.
+func IsZeroPricedModel(model string) bool {
+	zeroPriced.RLock()
+	_, ok := zeroPriced.ids[normalizePattern(model)]
+	zeroPriced.RUnlock()
+	return ok
 }
 
 func longestPrefixPrice(table map[string]Price, model string) (Price, bool) {

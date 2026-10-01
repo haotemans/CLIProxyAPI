@@ -17,6 +17,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/credentialweight"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/usagestats"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
@@ -358,6 +359,7 @@ func (h *Handler) GetAuthFileModels(c *gin.Context) {
 	models := reg.GetModelsForClient(authID)
 
 	result := make([]gin.H, 0, len(models))
+	pricer := usagestats.GlobalPricer()
 	for _, m := range models {
 		entry := gin.H{
 			"id": m.ID,
@@ -370,6 +372,11 @@ func (h *Handler) GetAuthFileModels(c *gin.Context) {
 		}
 		if m.OwnedBy != "" {
 			entry["owned_by"] = m.OwnedBy
+		}
+		// Zero-priced models (dynamic free tiers like OpenCode Zen anonymous,
+		// or an explicit {0,0} user override) get the panel's free badge.
+		if price, okPrice := pricer.PriceFor(m.ID); okPrice && price.Input == 0 && price.Output == 0 {
+			entry["free"] = true
 		}
 		result = append(result, entry)
 	}

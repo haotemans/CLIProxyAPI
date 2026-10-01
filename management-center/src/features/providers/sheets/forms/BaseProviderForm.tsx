@@ -21,6 +21,7 @@ import { hasDisableAllModelsRule } from '@/components/providers/utils';
 import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
 import type { ModelInfo } from '@/utils/models';
 import { PROVIDER_DESCRIPTORS } from '../../descriptors';
+import { opencodeGoEffectiveApiKey, isOpencodeGoAnonymousFreeKey } from '../../opencodeGoFreeTier';
 import { readThinkingLevels } from '../../thinkingLevels';
 import type {
   ApiKeyEntryInput,
@@ -585,6 +586,15 @@ export function BaseProviderForm({
                 {showSingleApiKey ? <IconEyeOff size={16} /> : <IconEye size={16} />}
               </button>
             </div>
+            {brand === 'opencodeGo' &&
+            isOpencodeGoAnonymousFreeKey(
+              opencodeGoEffectiveApiKey(
+                form.apiKey,
+                (resource?.raw as ProviderKeyConfig | undefined)?.apiKey
+              )
+            ) ? (
+              <div className="hint">{t('providersPage.form.opencodeGoPublicFreeHint')}</div>
+            ) : null}
           </div>
         ) : null}
 

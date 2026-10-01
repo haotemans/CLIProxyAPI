@@ -67,6 +67,18 @@
   border: 1px solid var(--border-color);
 }
 
+.freeBadge {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--success, #4caf7d);
+  padding: 1px 6px;
+  border-radius: $radius-full;
+  border: 1px solid color-mix(in srgb, var(--success, #4caf7d) 55%, transparent);
+  white-space: nowrap;
+}
+
 .excludedBadge {
   margin-left: auto;
   font-size: 10.5px;

@@ -30,6 +30,28 @@ var notAvailableMarkers = []string{
 	"insufficient credit for model",
 	"not listed for this key",
 	"key not authorized for model",
+	"freetiererror",
+	"can only be used from within opencode",
+}
+
+// limitedMarkers are texts meaning "retry later, nothing wrong with the
+// credential or the model grant" — capacity and allocation outages. The
+// OpenCode Zen free tier answers "Model is unavailable" (with any status,
+// e.g. 503) when a free slot cannot be allocated; that must NOT prune.
+var limitedMarkers = []string{
+	"model is unavailable",
+}
+
+// isLimitedMessage reports whether the error carries a transient
+// capacity/allocation marker.
+func isLimitedMessage(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, marker := range limitedMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // authMarkers substrings that mean the credential itself was rejected.
@@ -75,6 +97,11 @@ func classifyProbeError(err error) Status {
 	// prunable "model unavailable".
 	if isProviderBlockedMessage(err) {
 		return StatusProviderBlocked
+	}
+	// Capacity/allocation denials are transient for any status code: keep the
+	// model advertised and recheck next cycle instead of pruning.
+	if isLimitedMessage(err) {
+		return StatusLimited
 	}
 	status := 0
 	if se, ok := err.(interface{ StatusCode() int }); ok {

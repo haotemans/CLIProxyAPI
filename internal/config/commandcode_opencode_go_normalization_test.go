@@ -45,3 +45,31 @@ func TestSanitizeOpencodeGoKeys_DefaultBaseURLAndEmptyKey(t *testing.T) {
 		t.Fatalf("expected custom BaseURL to be kept, got %s", cfg.OpencodeGoKey[1].BaseURL)
 	}
 }
+
+func TestSanitizeOpencodeGoKeys_PublicKeyDefaultsToZenFreeBase(t *testing.T) {
+	cfg := &Config{
+		OpencodeGoKey: []OpencodeGoKey{
+			{APIKey: "public"},
+			{APIKey: "PUBLIC"},  // case-sensitive: stays a paid key shape
+			{APIKey: " public"}, // whitespace: not the anonymous tier either
+			{APIKey: "public", BaseURL: "https://mirror.example.com/zen/v1"},
+		},
+	}
+	cfg.SanitizeOpencodeGoKeys()
+
+	if len(cfg.OpencodeGoKey) != 4 {
+		t.Fatalf("expected 4 OpencodeGoKey entries, got %d", len(cfg.OpencodeGoKey))
+	}
+	if got := cfg.OpencodeGoKey[0].BaseURL; got != "https://opencode.ai/zen/v1" {
+		t.Fatalf("public key BaseURL = %s, want the anonymous zen root", got)
+	}
+	if got := cfg.OpencodeGoKey[1].BaseURL; got != opencodeGoDefaultBaseURL {
+		t.Fatalf("PUBLIC BaseURL = %s, want the paid default", got)
+	}
+	if got := cfg.OpencodeGoKey[2].BaseURL; got != opencodeGoDefaultBaseURL {
+		t.Fatalf("whitespace-padded BaseURL = %s, want the paid default", got)
+	}
+	if got := cfg.OpencodeGoKey[3].BaseURL; got != "https://mirror.example.com/zen/v1" {
+		t.Fatalf("explicit BaseURL = %s, want the configured mirror", got)
+	}
+}

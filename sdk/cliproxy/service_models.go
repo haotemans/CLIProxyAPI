@@ -155,13 +155,20 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 		// OpenCode Go relays speak OpenAI chat completions; same config-driven
 		// narrowing as commandcode.
 		models = registry.GetOpencodeGoModels()
-		if entry := s.resolveConfigOpencodeGoKey(a); entry != nil {
+		var entry *config.OpencodeGoKey
+		if resolved := s.resolveConfigOpencodeGoKey(a); resolved != nil {
+			entry = resolved
 			if len(entry.Models) > 0 {
 				models = buildOpencodeGoConfigModels(entry)
 			}
 			if authKind == "apikey" {
 				excluded = entry.ExcludedModels
 			}
+		}
+		if authKind == "apikey" && isZenFreeAuth(a) {
+			// The anonymous Zen free tier advertises exactly the discovered
+			// *-free set intersected with the key's enabled models.
+			models = s.zenFreeModelsForAuth(ctx, a, entry)
 		}
 		models = applyExcludedModels(models, excluded)
 	case "codex":

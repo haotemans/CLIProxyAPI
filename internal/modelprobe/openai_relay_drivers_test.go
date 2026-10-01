@@ -82,6 +82,11 @@ func TestRelayProbeDrivers_OutcomeMatrix(t *testing.T) {
 		{"opencode-go usable 200", "opencode-go", http.StatusOK, `{"id":"g","choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`, StatusUsable, "kimi-k3"},
 		{"opencode-go tier deny text", "opencode-go", http.StatusForbidden, `{"error":"model not available in your plan"}`, StatusNotAvailable, "kimi-k3"},
 		{"opencode-go auth 403", "opencode-go", http.StatusForbidden, `{"error":"forbidden for this account"}`, StatusAuthError, "kimi-k3"},
+		{"zen free tier gate prunes", "opencode-go", http.StatusForbidden, `{"error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode"}}`, StatusNotAvailable, "mimo-v2.5-free"},
+		{"zen free tier gate phrase 400", "opencode-go", http.StatusBadRequest, `{"error":"OpenCode's free tier can only be used from within OpenCode"}`, StatusNotAvailable, "mimo-v2.5-free"},
+		{"zen free capacity is limited", "opencode-go", http.StatusServiceUnavailable, `{"error":"Model is unavailable"}`, StatusLimited, "space-bunny-free"},
+		{"zen free capacity 400 is limited", "opencode-go", http.StatusBadRequest, `{"error":{"message":"Model is unavailable"}}`, StatusLimited, "space-bunny-free"},
+		{"plain 503 stays unreachable", "opencode-go", http.StatusServiceUnavailable, `{"error":"backend down"}`, StatusUnreachable, "space-bunny-free"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

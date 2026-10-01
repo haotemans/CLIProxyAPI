@@ -102,6 +102,9 @@ export function AuthFileModelsModal(props: AuthFileModelsModalProps) {
                   <span className={styles.modelDisplayName}>{model.display_name}</span>
                 )}
                 {model.type && <span className={styles.modelType}>{model.type}</span>}
+                {model.free === true && (
+                  <span className={styles.freeBadge}>{t('auth_files.models_free_badge')}</span>
+                )}
                 {canTest && (
                   <button
                     type="button"

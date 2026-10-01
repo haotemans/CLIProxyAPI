@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/opencode"
 	sdkpluginstore "github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginstore"
 )
 
@@ -312,6 +313,8 @@ func (cfg *Config) SanitizeCommandcodeKeys() {
 
 // SanitizeOpencodeGoKeys normalizes OpenCode Go API key entries: the base URL
 // defaults to the public endpoint, and entries without an API key are dropped.
+// The literal "public" key selects the anonymous Zen free tier and defaults to
+// the /zen/v1 root instead (an explicit base-url still wins).
 func (cfg *Config) SanitizeOpencodeGoKeys() {
 	if cfg == nil || len(cfg.OpencodeGoKey) == 0 {
 		return
@@ -319,12 +322,17 @@ func (cfg *Config) SanitizeOpencodeGoKeys() {
 	out := make([]OpencodeGoKey, 0, len(cfg.OpencodeGoKey))
 	for i := range cfg.OpencodeGoKey {
 		e := cfg.OpencodeGoKey[i]
+		rawKey := e.APIKey
 		e.APIKey = strings.TrimSpace(e.APIKey)
 		e.ProxyURL = strings.TrimSpace(e.ProxyURL)
 		e.Prefix = normalizeModelPrefix(e.Prefix)
 		e.BaseURL = strings.TrimSpace(e.BaseURL)
 		if e.BaseURL == "" {
-			e.BaseURL = opencodeGoDefaultBaseURL
+			if opencode.IsZenFreeAPIKey(rawKey) {
+				e.BaseURL = opencode.ZenFreeDefaultBaseURL
+			} else {
+				e.BaseURL = opencodeGoDefaultBaseURL
+			}
 		}
 		e.Headers = NormalizeHeaders(e.Headers)
 		e.ExcludedModels = NormalizeExcludedModels(e.ExcludedModels)

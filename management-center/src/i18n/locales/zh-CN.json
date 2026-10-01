@@ -423,7 +423,8 @@
     "probe_catalog": "目录 {{size}}",
     "probe_provider_blocked_hint": "Cline 正在收紧第三方访问（周期性）",
     "model_test_run": "测试",
-    "model_test_running": "测试中…"
+    "model_test_running": "测试中…",
+    "models_free_badge": "免费"
   },
   "antigravity_subscription": {
     "plan_unknown": "未知",
@@ -1809,6 +1810,7 @@
       "name": "名称",
       "apiKey": "API 密钥",
       "apiKeyCreatePlaceholder": "输入 API 密钥",
+      "opencodeGoPublicFreeHint": "密钥 \"public\" 将启用 OpenCode Zen 匿名免费层：仅限 *-free 模型，价格为 0；可用集合动态变化，请在认证文件页运行探测查看实际可用。",
       "apiKeyEditPlaceholder": "留空表示不修改",
       "baseUrl": "服务地址",
       "baseUrlRequiredHint": "此提供商要求填写服务地址",
