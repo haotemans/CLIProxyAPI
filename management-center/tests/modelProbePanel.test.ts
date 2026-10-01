@@ -9,6 +9,7 @@ import {
   PROBE_SUPPORTED_PROVIDERS,
   rowsToMap,
   splitProbeSummary,
+  splitPruneResult,
 } from '@/features/authFiles/modelProbe/logic';
 import { apiClient } from '@/services/api/client';
 
@@ -86,6 +87,22 @@ describe('modelProbeApi.run', () => {
       const resp = await modelProbeApi.run('idx-1');
       expect(resp.summary?.probed).toBe(true);
       expect(post).toHaveBeenLastCalledWith('/model-probe/run', { auth_index: 'idx-1' }, undefined);
+    } finally {
+      post.mockRestore();
+    }
+  });
+
+  test('prune flag posts prune_unused to /model-probe/run', async () => {
+    const payload = { status: 'ok', prune_run: { at: 'x', removed: ['a', 'b'] } };
+    const post = spyOn(apiClient, 'post').mockResolvedValue(payload);
+    try {
+      const resp = await modelProbeApi.run('idx-1', true);
+      expect(resp.prune_run?.removed).toHaveLength(2);
+      expect(post).toHaveBeenLastCalledWith(
+        '/model-probe/run',
+        { auth_index: 'idx-1', prune_unused: true },
+        undefined
+      );
     } finally {
       post.mockRestore();
     }
@@ -186,6 +203,47 @@ describe('probePresentation', () => {
       const catalogKey = translations.auth_files.probe_catalog as string;
       expect(hint).toBeTruthy();
       expect(catalogKey).toContain('{{size}}');
+    }
+  });
+});
+
+describe('aggressive prune result line', () => {
+  const localeRender = (locale: string) => {
+    const translations = JSON.parse(readFileSync(`src/i18n/locales/${locale}.json`, 'utf8'));
+    const template = translations.auth_files.probe_prune_result as string;
+    return (values: { usable: string; removed: string }) =>
+      template.replaceAll('{{usable}}', values.usable).replaceAll('{{removed}}', values.removed);
+  };
+
+  test('splits usable/removed values in all 4 locales without sentinel leaks', () => {
+    for (const locale of ['en', 'zh-CN', 'zh-TW', 'ru']) {
+      const parts = splitPruneResult(localeRender(locale), 3, 2);
+      const byKind = Object.fromEntries(parts.map((part) => [part.kind, part.text]));
+      expect(byKind.usable).toBe('3');
+      expect(byKind.removed).toBe('2');
+      for (const part of parts) {
+        expect(part.text).not.toContain('@@U@@');
+        expect(part.text).not.toContain('@@R@@');
+      }
+      expect(parts.map((part) => part.text).join('')).toBe(
+        localeRender(locale)({ usable: '3', removed: '2' })
+      );
+    }
+  });
+
+  test('zh-CN pins the requested button and result wording', () => {
+    const zhCN = JSON.parse(readFileSync('src/i18n/locales/zh-CN.json', 'utf8'));
+    expect(zhCN.auth_files.probe_run).toBe('探测并清理');
+    expect(zhCN.auth_files.probe_prune_result).toBe('可用 {{usable}} · 已除 {{removed}}');
+  });
+
+  test('every locale carries a non-empty aggressive button label and both placeholders', () => {
+    for (const locale of ['en', 'zh-CN', 'zh-TW', 'ru']) {
+      const translations = JSON.parse(readFileSync(`src/i18n/locales/${locale}.json`, 'utf8'));
+      expect(translations.auth_files.probe_run.trim()).not.toBe('');
+      const template = translations.auth_files.probe_prune_result as string;
+      expect(template).toContain('{{usable}}');
+      expect(template).toContain('{{removed}}');
     }
   });
 });

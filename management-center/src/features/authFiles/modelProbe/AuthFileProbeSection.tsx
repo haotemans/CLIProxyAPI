@@ -10,6 +10,7 @@ import {
   probePresentation,
   PROBE_SUPPORTED_PROVIDERS,
   splitProbeSummary,
+  splitPruneResult,
   type ProbeSummaryPart,
 } from './logic';
 
@@ -38,6 +39,18 @@ const partClass = (part: ProbeSummaryPart, usable: number, pruned: number): stri
   }
 };
 
+// Aggressive prune result line: the removed count turns red only when >0.
+const pruneResultPartClass = (part: ProbeSummaryPart, usable: number, removed: number): string => {
+  switch (part.kind) {
+    case 'usable':
+      return usable > 0 ? styles.probeCountUsable : styles.probeCountNeutral;
+    case 'removed':
+      return removed > 0 ? styles.probeCountPruned : styles.probeCountNeutral;
+    default:
+      return styles.probeCountNeutral;
+  }
+};
+
 /**
  * Per-card model-probe line: one small muted meta row (same visual weight as
  * the other card meta lines) summarizing usable/pruned counts and last check
@@ -49,6 +62,7 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
   const now = useNow();
   const [probing, setProbing] = useState(false);
   const [error, setError] = useState('');
+  const [pruneResult, setPruneResult] = useState<{ usable: number; removed: number } | null>(null);
 
   const providerKey = String(file.type ?? file.provider ?? '').trim().toLowerCase();
   if (!PROBE_SUPPORTED_PROVIDERS.has(providerKey)) return null;
@@ -64,8 +78,9 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
   const handleProbe = async () => {
     setProbing(true);
     setError('');
+    setPruneResult(null);
     try {
-      const resp = await modelProbeApi.run(authIndex);
+      const resp = await modelProbeApi.run(authIndex, true);
       if (resp.summary) {
         onProbed(file.name, {
           probed: resp.summary.probed,
@@ -75,6 +90,10 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
           pruned_models: resp.summary.pruned_models,
         });
       }
+      setPruneResult({
+        usable: resp.summary?.usable ?? 0,
+        removed: resp.prune_run?.removed?.length ?? 0,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -136,6 +155,30 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
       </button>
       {error && (
         <span className={styles.probeError}>{t('auth_files.probe_failed', { message: error })}</span>
+      )}
+      {pruneResult && (
+        <span className={styles.probeTitle}>
+          {splitPruneResult(
+            (values) =>
+              t('auth_files.probe_prune_result', {
+                usable: values.usable,
+                removed: values.removed,
+              }),
+            pruneResult.usable,
+            pruneResult.removed
+          ).map((part, index) =>
+            part.kind === 'text' ? (
+              <span key={index}>{part.text}</span>
+            ) : (
+              <span
+                key={index}
+                className={pruneResultPartClass(part, pruneResult.usable, pruneResult.removed)}
+              >
+                {part.text}
+              </span>
+            )
+          )}
+        </span>
       )}
       {skipReason && (
         <span className={styles.probeNoteMuted}>{t('auth_files.probe_skipped', { reason: skipReason })}</span>

@@ -40,6 +40,12 @@ func decodeSection(raw any) (*Section, error) {
 		section.Pruned[i] = strings.ToLower(strings.TrimSpace(section.Pruned[i]))
 	}
 	section.Pruned = dedupeSorted(section.Pruned)
+	if section.PruneRun != nil {
+		for i := range section.PruneRun.Removed {
+			section.PruneRun.Removed[i] = strings.ToLower(strings.TrimSpace(section.PruneRun.Removed[i]))
+		}
+		section.PruneRun.Removed = dedupeSorted(section.PruneRun.Removed)
+	}
 	for key := range section.PerModel {
 		normalized := strings.ToLower(strings.TrimSpace(key))
 		if normalized != key {

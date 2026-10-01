@@ -42,6 +42,9 @@ export interface ModelProbeRunResponse {
   status?: string;
   summary?: { probed?: boolean; checked_at?: string; usable?: number; pruned?: number; pruned_models?: string[] };
   models?: ModelProbeRunModelRow[];
+  /** Present when the run was requested with prune_unused (aggressive prune):
+   * every non-usable model left the credential's effective catalog. */
+  prune_run?: { at?: string; removed?: string[] };
 }
 
 export interface ModelTestResponse {
@@ -60,10 +63,10 @@ export const modelProbeApi = {
       ...(signal ? { signal } : {}),
     }),
 
-  run: (authIndex: string, signal?: AbortSignal): Promise<ModelProbeRunResponse> =>
+  run: (authIndex: string, pruneUnused?: boolean, signal?: AbortSignal): Promise<ModelProbeRunResponse> =>
     apiClient.post<ModelProbeRunResponse>(
       '/model-probe/run',
-      { auth_index: authIndex },
+      { auth_index: authIndex, ...(pruneUnused ? { prune_unused: true } : {}) },
       signal ? { signal } : undefined
     ),
 

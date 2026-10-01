@@ -58,6 +58,12 @@ func MergeSections(previous, fresh *Section) *Section {
 		// last known one so the panel doesn't blank the counter on backoff.
 		CatalogSize: maxInt(fresh.CatalogSize, previous.CatalogSize),
 	}
+	// A manual aggressive prune marker is audit until the next manual run;
+	// conservative scheduled cycles never set it and must not erase it.
+	combined.PruneRun = fresh.PruneRun
+	if combined.PruneRun == nil {
+		combined.PruneRun = previous.PruneRun
+	}
 	stillUnavailable := make(map[string]struct{}, len(previous.Pruned))
 	for id, outcome := range previous.PerModel {
 		combined.PerModel[id] = outcome

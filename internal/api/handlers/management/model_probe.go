@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -118,7 +119,8 @@ func (h *Handler) GetModelProbeStatus(c *gin.Context) {
 }
 
 type modelProbeRunRequest struct {
-	AuthIndex string `json:"auth_index"`
+	AuthIndex   string `json:"auth_index"`
+	PruneUnused bool   `json:"prune_unused"`
 }
 
 // PostModelProbeRun handles POST /model-probe/run. Inline probe for one
@@ -155,7 +157,7 @@ func (h *Handler) PostModelProbeRun(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "auth not found"})
 		return
 	}
-	section, errProbe := h.inlineModelProbe(c.Request.Context(), auth)
+	section, errProbe := h.inlineModelProbe(c.Request.Context(), auth, body.PruneUnused)
 	if errProbe != nil {
 		c.JSON(http.StatusNotImplemented, gin.H{"error": errProbe.Error()})
 		return
@@ -164,15 +166,24 @@ func (h *Handler) PostModelProbeRun(c *gin.Context) {
 	if details == nil {
 		details = []map[string]any{}
 	}
-	c.JSON(http.StatusOK, gin.H{
+	payload := gin.H{
 		"status":  "ok",
 		"summary": modelprobe.SummaryForAuth(auth),
 		"models":  details,
-	})
+	}
+	if body.PruneUnused && section.PruneRun != nil {
+		payload["prune_run"] = section.PruneRun
+	}
+	c.JSON(http.StatusOK, payload)
 }
 
 // inlineModelProbe probes one credential synchronously with the native engine.
-func (h *Handler) inlineModelProbe(ctx context.Context, auth *cliproxyauth.Auth) (*modelprobe.Section, error) {
+// When prune is set (the manual "probe and prune" action), every probed model
+// whose outcome is not usable is marked removed in a prune_run marker; the
+// marker's filter drops those ids from the credential's effective catalog as
+// soon as the auth re-registers (the Update below), while scheduled cycles
+// keep their conservative rules untouched.
+func (h *Handler) inlineModelProbe(ctx context.Context, auth *cliproxyauth.Auth, prune bool) (*modelprobe.Section, error) {
 	engine := h.modelProbeEngine()
 	if engine == nil {
 		return nil, fmt.Errorf("model-probe engine unavailable")
@@ -205,6 +216,9 @@ func (h *Handler) inlineModelProbe(ctx context.Context, auth *cliproxyauth.Auth)
 	if section == nil {
 		return nil, fmt.Errorf("probe cycle skipped")
 	}
+	if prune {
+		section.PruneRun = aggressivePruneRun(section)
+	}
 	store := &modelprobe.Store{AuthDir: h.cfg.AuthDir}
 	merged := store.ApplyOutcome(auth, section)
 	// Reflect the probe result into the live registered auth: the returned
@@ -217,4 +231,19 @@ func (h *Handler) inlineModelProbe(ctx context.Context, auth *cliproxyauth.Auth)
 		}
 	}
 	return merged, nil
+}
+
+// aggressivePruneRun builds the audit marker for a manual prune-and-verify
+// run: every non-usable outcome leaves the effective catalog, the usable set
+// stays. An empty Removed means everything probed usable.
+func aggressivePruneRun(section *modelprobe.Section) *modelprobe.PruneRun {
+	removed := make([]string, 0, len(section.PerModel))
+	for id, outcome := range section.PerModel {
+		if outcome == nil || outcome.Status == modelprobe.StatusUsable {
+			continue
+		}
+		removed = append(removed, id)
+	}
+	sort.Strings(removed)
+	return &modelprobe.PruneRun{At: section.CheckedAt, Removed: removed}
 }

@@ -74,6 +74,31 @@ type Section struct {
 	SkipCycle uint64 `json:"skip_cycle,omitempty"`
 	// Skips explains per-model skips (limited backoff), keyed by model ID.
 	Skips map[string]string `json:"skips,omitempty"`
+
+	// PruneRun is set by a manual aggressive "probe and prune" run
+	// (model-probe/run with prune_unused): every probed model whose outcome
+	// was not usable is dropped from the credential's effective catalog on the
+	// spot. Scheduled cycles never set this; their conservative rules stay
+	// unchanged, and the run marker survives merges as audit.
+	//
+	// Recovery: the removal never poisons the upstream discovery list or the
+	// static registry catalog, it only filters this credential's effective
+	// set. A model refresh may rediscover ids upstream, and when the whole
+	// catalog was removed the scheduler re-probes the section rows on the
+	// next cycle — any model whose latest outcome turns usable re-enters the
+	// catalog at the next registration, while still-broken ids stay hidden.
+	// A fully removed catalog does NOT disable the credential.
+	PruneRun *PruneRun `json:"prune_run,omitempty"`
+}
+
+// PruneRun audits one manual aggressive prune: when it ran and which models
+// stopped being advertised (usable outcomes were kept, all others removed).
+type PruneRun struct {
+	// At is the RFC3339 moment the aggressive run finished.
+	At string `json:"at"`
+	// Removed lists every model id deleted from the effective catalog
+	// (lowercase, deduped, sorted). Empty means everything probed usable.
+	Removed []string `json:"removed"`
 }
 
 // IsProviderBlocked reports whether EVERY recorded outcome is provider_blocked:
@@ -109,28 +134,61 @@ func ReadSection(metadata map[string]any) *Section {
 }
 
 // FilterPrunedForAuth returns models with the credential's pruned list
-// removed. It is a passthrough when no probe section exists or when the
-// pruned list is empty.
+// removed. It is a passthrough when no probe section exists or when neither
+// the conservative pruned list nor an aggressive prune_run marker applies.
+// Ids dropped by a manual prune_run stay hidden only while their latest
+// probed outcome is not usable — a model re-probed usable re-enters the
+// catalog (self-healing), the marker stays as audit.
 func FilterPrunedForAuth(metadata map[string]any, models []*registry.ModelInfo) []*registry.ModelInfo {
 	section := ReadSection(metadata)
-	if section == nil || len(section.Pruned) == 0 {
+	if section == nil || (len(section.Pruned) == 0 && len(section.pruneRemoved()) == 0) {
 		return models
 	}
 	pruned := make(map[string]struct{}, len(section.Pruned))
 	for _, id := range section.Pruned {
 		pruned[strings.ToLower(strings.TrimSpace(id))] = struct{}{}
 	}
+	removed := section.pruneRemoved()
 	out := make([]*registry.ModelInfo, 0, len(models))
 	for _, model := range models {
 		if model == nil {
 			continue
 		}
-		if _, blocked := pruned[strings.ToLower(strings.TrimSpace(model.ID))]; blocked {
+		key := strings.ToLower(strings.TrimSpace(model.ID))
+		if _, blocked := pruned[key]; blocked {
+			continue
+		}
+		if _, gone := removed[key]; gone && !section.usableNow(key) {
 			continue
 		}
 		out = append(out, model)
 	}
 	return out
+}
+
+// pruneRemoved returns the aggressively removed id set (empty without a
+// prune_run marker).
+func (s *Section) pruneRemoved() map[string]struct{} {
+	out := map[string]struct{}{}
+	if s == nil || s.PruneRun == nil {
+		return out
+	}
+	for _, id := range s.PruneRun.Removed {
+		if key := strings.ToLower(strings.TrimSpace(id)); key != "" {
+			out[key] = struct{}{}
+		}
+	}
+	return out
+}
+
+// usableNow reports whether the credential's latest recorded outcome for the
+// model is usable.
+func (s *Section) usableNow(key string) bool {
+	if s == nil || s.PerModel == nil {
+		return false
+	}
+	outcome := s.PerModel[key]
+	return outcome != nil && outcome.Status == StatusUsable
 }
 
 // FromOutcomes flattens per-model outcomes into a persisted Section.

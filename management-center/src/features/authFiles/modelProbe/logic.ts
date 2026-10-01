@@ -104,47 +104,25 @@ export const formatRelativeFromNow = (iso: string | undefined, now: number): str
 
 /** One piece of the localized probe summary line. */
 export interface ProbeSummaryPart {
-  /** text = static translated fragment; usable/pruned/date = rendered values. */
-  kind: 'text' | 'usable' | 'pruned' | 'date';
+  /** text = static translated fragment; usable/pruned/removed/date = rendered values. */
+  kind: 'text' | 'usable' | 'pruned' | 'removed' | 'date';
   text: string;
 }
 
-const PROBE_SENTINEL_TOKENS = [
-  { kind: 'usable' as const, token: '@@U@@' },
-  { kind: 'pruned' as const, token: '@@P@@' },
-  { kind: 'date' as const, token: '@@D@@' },
-] as const;
-
 /**
- * Splits the probe_summary translation into parts while keeping every
- * localized word intact. The locale template is resolved through the normal
- * i18n call with sentinel placeholders so the user's locale file never
- * changes; counts and the date become separately styleable spans (status
- * colors apply only to non-zero counts).
+ * Splits a localized probe line into parts while keeping every localized word
+ * intact. The locale template is resolved through the normal i18n call with
+ * sentinel placeholders so the user's locale file never changes; counts and
+ * the date become separately styleable spans (status colors apply only to
+ * non-zero counts).
  */
-export const splitProbeSummary = (
-  render: (values: { usable: string; pruned: string; date: string }) => string,
-  usable: number,
-  pruned: number,
-  date: string
+const splitSentinelTemplate = <K extends 'usable' | 'pruned' | 'removed' | 'date'>(
+  template: string,
+  tokens: readonly { kind: K; token: string }[],
+  valueByKind: Record<K, string>
 ): ProbeSummaryPart[] => {
-  const template = render({
-    usable: PROBE_SENTINEL_TOKENS[0].token,
-    pruned: PROBE_SENTINEL_TOKENS[1].token,
-    date: PROBE_SENTINEL_TOKENS[2].token,
-  });
-  const valueByKind: Record<'usable' | 'pruned' | 'date', string> = {
-    usable: String(usable),
-    pruned: String(pruned),
-    date,
-  };
-  const tokenToKind = new Map<string, 'usable' | 'pruned' | 'date'>(
-    PROBE_SENTINEL_TOKENS.map((item) => [item.token, item.kind])
-  );
-  const pattern = new RegExp(
-    PROBE_SENTINEL_TOKENS.map((item) => escapeProbeSentinel(item.token)).join('|'),
-    'g'
-  );
+  const tokenToKind = new Map<string, K>(tokens.map((item) => [item.token, item.kind]));
+  const pattern = new RegExp(tokens.map((item) => escapeProbeSentinel(item.token)).join('|'), 'g');
   const parts: ProbeSummaryPart[] = [];
   let last = 0;
   for (const match of template.matchAll(pattern)) {
@@ -158,6 +136,37 @@ export const splitProbeSummary = (
   if (last < template.length) parts.push({ kind: 'text', text: template.slice(last) });
   return parts.filter((part) => part.kind !== 'text' || part.text !== '');
 };
+
+export const splitProbeSummary = (
+  render: (values: { usable: string; pruned: string; date: string }) => string,
+  usable: number,
+  pruned: number,
+  date: string
+): ProbeSummaryPart[] =>
+  splitSentinelTemplate(
+    render({ usable: '@@U@@', pruned: '@@P@@', date: '@@D@@' }),
+    [
+      { kind: 'usable', token: '@@U@@' },
+      { kind: 'pruned', token: '@@P@@' },
+      { kind: 'date', token: '@@D@@' },
+    ],
+    { usable: String(usable), pruned: String(pruned), date }
+  );
+
+/** Splits the aggressive prune result line ("usable n · removed m"). */
+export const splitPruneResult = (
+  render: (values: { usable: string; removed: string }) => string,
+  usable: number,
+  removed: number
+): ProbeSummaryPart[] =>
+  splitSentinelTemplate(
+    render({ usable: '@@U@@', removed: '@@R@@' }),
+    [
+      { kind: 'usable', token: '@@U@@' },
+      { kind: 'removed', token: '@@R@@' },
+    ],
+    { usable: String(usable), removed: String(removed) }
+  );
 
 const escapeProbeSentinel = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
