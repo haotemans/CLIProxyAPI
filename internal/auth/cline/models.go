@@ -59,6 +59,7 @@ func (a *ClineAuth) FetchAvailableModels(ctx context.Context, accessToken string
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
+	ApplyClientHeaders(req, nil)
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {

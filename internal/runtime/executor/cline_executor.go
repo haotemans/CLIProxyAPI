@@ -88,6 +88,7 @@ func (e *ClineExecutor) PrepareRequest(req *http.Request, auth *cliproxyauth.Aut
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(req, attrs)
+	clineauth.ApplyClientHeaders(req, attrs)
 	return nil
 }
 
@@ -157,6 +158,7 @@ func (e *ClineExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, re
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	clineauth.ApplyClientHeaders(httpReq, attrs)
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
@@ -271,6 +273,7 @@ func (e *ClineExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.Au
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	clineauth.ApplyClientHeaders(httpReq, attrs)
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID

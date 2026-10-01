@@ -47,7 +47,37 @@ const (
 
 	// refreshThresholdSeconds is when to refresh a token before expiry (5 minutes).
 	refreshThresholdSeconds = 300
+
+	// DefaultClientVersion is the client identity reported to the Cline
+	// account API. Cline's chat endpoint rejects requests that do not carry a
+	// current client version, so requests must identify like the official
+	// extension does.
+	DefaultClientVersion = "4.1.22"
+
+	// ClientType is the client identity name sent alongside DefaultClientVersion.
+	ClientType = "vscode"
 )
+
+// ApplyClientHeaders sets the Cline client identification headers the
+// account API expects on every request. The optional attrs map may override
+// the defaults via client_version/client_type entries.
+func ApplyClientHeaders(req *http.Request, attrs map[string]string) {
+	version := DefaultClientVersion
+	clientType := ClientType
+	if attrs != nil {
+		if v := strings.TrimSpace(attrs["client_version"]); v != "" {
+			version = v
+		}
+		if t := strings.TrimSpace(attrs["client_type"]); t != "" {
+			clientType = t
+		}
+	}
+	req.Header.Set("User-Agent", "Cline/"+version)
+	req.Header.Set("X-CLIENT-TYPE", clientType)
+	req.Header.Set("X-CLIENT-VERSION", version)
+	req.Header.Set("X-PLATFORM", clientType)
+	req.Header.Set("X-PLATFORM-VERSION", version)
+}
 
 var clineRefreshGroup singleflight.Group
 
