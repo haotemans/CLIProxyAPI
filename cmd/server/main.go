@@ -118,6 +118,10 @@ func main() {
 	var clineLogin bool
 	var cursorLogin bool
 	var kiroLogin bool
+	var mirasimLogin bool
+	var mirasimLoginProvider string
+	var mirasimLoginEmail string
+	var mirasimLoginCode string
 	var kiroAWSLogin bool
 	var kiroAWSAuthCode bool
 	var kiroImport bool
@@ -156,6 +160,10 @@ func main() {
 	flag.BoolVar(&metaLogin, "meta-login", false, "Login to Meta using OAuth")
 	flag.BoolVar(&clineLogin, "cline-login", false, "Login to Cline using OAuth")
 	flag.BoolVar(&cursorLogin, "cursor-login", false, "Login to Cursor using OAuth")
+	flag.BoolVar(&mirasimLogin, "mirasim-login", false, "Login to Mirasim using OAuth (loopback callback with paste fallback)")
+	flag.StringVar(&mirasimLoginProvider, "mirasim-login-provider", "", "Mirasim OAuth provider from /auth/oauth/providers (default github)")
+	flag.StringVar(&mirasimLoginEmail, "mirasim-login-email", "", "Login to Mirasim with a code mailed to this address instead of an OAuth provider")
+	flag.StringVar(&mirasimLoginCode, "mirasim-login-code", "", "Mirasim email sign-in code, to complete an email login without a prompt (use with -mirasim-login-email)")
 	flag.BoolVar(&kiroLogin, "kiro-login", false, "Login to Kiro using AWS Builder ID (device code flow)")
 	flag.BoolVar(&kiroAWSLogin, "kiro-aws-login", false, "Login to Kiro using AWS Builder ID (device code flow)")
 	flag.BoolVar(&kiroAWSAuthCode, "kiro-aws-authcode", false, "Login to Kiro using AWS Builder ID (authorization code flow, better UX)")
@@ -674,7 +682,7 @@ func main() {
 		CallbackPort: oauthCallbackPort,
 	}
 
-	commandMode := vertexImport != "" || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || kimiAILogin || xaiLogin || devinLogin || metaLogin || clineLogin || cursorLogin || kiroLogin || kiroAWSLogin || kiroAWSAuthCode || kiroImport || kiroIDCLogin
+	commandMode := vertexImport != "" || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || kimiAILogin || xaiLogin || devinLogin || metaLogin || clineLogin || cursorLogin || mirasimLogin || kiroLogin || kiroAWSLogin || kiroAWSAuthCode || kiroImport || kiroIDCLogin
 	cloudConfigMissing := isCloudDeploy && !configFileExists
 	homeMode := configLoadedFromHome || (cfg != nil && cfg.Home.Enabled)
 	exampleAPIKeySafeMode := shouldEnableExampleAPIKeySafeMode(cfg, commandMode, tuiMode, standalone, cloudConfigMissing, homeMode)
@@ -758,6 +766,8 @@ func main() {
 		cmd.DoClineLogin(cfg, options)
 	} else if cursorLogin {
 		cmd.DoCursorLogin(cfg, options)
+	} else if mirasimLogin {
+		cmd.DoMirasimLogin(cfg, options, mirasimLoginProvider, mirasimLoginEmail, mirasimLoginCode)
 	} else if kiroLogin {
 		cmd.DoKiroLogin(cfg, options)
 	} else if kiroAWSLogin {
@@ -1003,6 +1013,7 @@ func argvFlagConsumesValue(name string) bool {
 	switch name {
 	case "codex-login", "codex-device-login", "claude-login", "no-browser",
 		"antigravity-login", "kimi-login", "kimi-ai-login", "xai-login", "devin-login", "meta-login", "cline-login", "cursor-login",
+		"mirasim-login",
 		"kiro-login", "kiro-aws-login", "kiro-aws-authcode", "kiro-import", "kiro-idc-login",
 		"discover", "discover-json", "home-disable-cluster-discovery",
 		"tui", "standalone", "local-model":

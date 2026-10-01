@@ -25,6 +25,15 @@ func (s *Server) registerManagementRoutes() {
 	s.engine.POST("/v0/management/oauth-callback", s.managementAvailabilityMiddleware(), s.mgmt.PostOAuthCallback)
 	s.engine.GET("/v0/management/oauth-callback", s.managementAvailabilityMiddleware(), s.mgmt.GetOAuthCallback)
 
+	// Mirasim browser OAuth flow: the start page, provider redirect, callback
+	// and email-code pages are browser-facing (no management token), answered
+	// only for the state of a pending login, mirroring the plugin's routes.
+	s.engine.GET("/mirasim/oauth/start", s.managementAvailabilityMiddleware(), s.mgmt.GetMirasimOAuthStart)
+	s.engine.GET("/mirasim/oauth/authorize", s.managementAvailabilityMiddleware(), s.mgmt.GetMirasimOAuthAuthorize)
+	s.engine.GET("/mirasim/oauth/callback", s.managementAvailabilityMiddleware(), s.mgmt.GetMirasimOAuthCallback)
+	s.engine.GET("/mirasim/oauth/email/send", s.managementAvailabilityMiddleware(), s.mgmt.GetMirasimOAuthEmailSend)
+	s.engine.GET("/mirasim/oauth/email/verify", s.managementAvailabilityMiddleware(), s.mgmt.GetMirasimOAuthEmailVerify)
+
 	mgmt := s.engine.Group("/v0/management")
 	mgmt.Use(s.managementAvailabilityMiddleware(), s.mgmt.Middleware())
 	{
@@ -224,6 +233,7 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.GET("/cline-auth-url", s.mgmt.RequestClineToken)
 		mgmt.GET("/cursor-auth-url", s.mgmt.RequestCursorToken)
 		mgmt.GET("/kiro-auth-url", s.mgmt.RequestKiroToken)
+		mgmt.GET("/mirasim-auth-url", s.mgmt.RequestMirasimToken)
 		mgmt.GET("/get-auth-status", s.mgmt.GetAuthStatus)
 		mgmt.DELETE("/oauth-session", s.mgmt.CancelAuthSession)
 	}

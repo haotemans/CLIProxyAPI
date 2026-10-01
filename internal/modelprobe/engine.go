@@ -29,17 +29,19 @@ type executorFactory func(cfg *config.Config) RequestExecutor
 // executorFactories maps provider keys to probe-capable executor builders.
 // V1 drivers are executor-based (same translation path live traffic uses):
 // cursor (Connect/H2), kiro (EventStream), cline, claude, codex, xai, devin,
-// meta. Skipped providers (gemini/antigravity/vertex/aistudio/mirasim)
-// are reported as unsupported drivers.
+// meta, mirasim (signed relay via the mirasim OAuth branch). Skipped
+// providers (gemini/antigravity/vertex/aistudio) are reported as unsupported
+// drivers.
 var executorFactories = map[string]executorFactory{
-	"cline":  func(cfg *config.Config) RequestExecutor { return executor.NewClineExecutor(cfg) },
-	"cursor": func(cfg *config.Config) RequestExecutor { return executor.NewCursorExecutor(cfg) },
-	"kiro":   func(cfg *config.Config) RequestExecutor { return executor.NewKiroExecutor(cfg) },
-	"claude": func(cfg *config.Config) RequestExecutor { return executor.NewClaudeExecutor(cfg) },
-	"codex":  func(cfg *config.Config) RequestExecutor { return executor.NewCodexExecutor(cfg) },
-	"xai":    func(cfg *config.Config) RequestExecutor { return executor.NewXAIExecutor(cfg) },
-	"devin":  func(cfg *config.Config) RequestExecutor { return executor.NewDevinExecutor(cfg) },
-	"meta":   func(cfg *config.Config) RequestExecutor { return executor.NewMetaExecutor(cfg) },
+	"cline":   func(cfg *config.Config) RequestExecutor { return executor.NewClineExecutor(cfg) },
+	"cursor":  func(cfg *config.Config) RequestExecutor { return executor.NewCursorExecutor(cfg) },
+	"kiro":    func(cfg *config.Config) RequestExecutor { return executor.NewKiroExecutor(cfg) },
+	"claude":  func(cfg *config.Config) RequestExecutor { return executor.NewClaudeExecutor(cfg) },
+	"codex":   func(cfg *config.Config) RequestExecutor { return executor.NewCodexExecutor(cfg) },
+	"xai":     func(cfg *config.Config) RequestExecutor { return executor.NewXAIExecutor(cfg) },
+	"devin":   func(cfg *config.Config) RequestExecutor { return executor.NewDevinExecutor(cfg) },
+	"meta":    func(cfg *config.Config) RequestExecutor { return executor.NewMetaExecutor(cfg) },
+	"mirasim": func(cfg *config.Config) RequestExecutor { return executor.NewMirasimExecutor(cfg) },
 }
 
 // SupportedProviders lists the V1 executor-driven probe drivers.

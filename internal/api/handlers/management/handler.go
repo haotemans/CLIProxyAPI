@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	mirasimauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/mirasim"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/buildinfo"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelprobe"
@@ -63,6 +64,7 @@ type Handler struct {
 	pluginStoreRateLimiter   *pluginstore.GitHubRateLimiter
 	pluginReleases           pluginReleaseCache
 	modelProbeEngineOverride *modelprobe.Engine
+	mirasimOAuth             *mirasimauth.BrowserCoordinator
 }
 
 type configReloadSnapshot struct {

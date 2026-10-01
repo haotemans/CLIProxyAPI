@@ -11,6 +11,7 @@ import (
 	"time"
 
 	kiroauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/kiro"
+	mirasimauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/mirasim"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 	log "github.com/sirupsen/logrus"
@@ -115,8 +116,34 @@ func kiroTokenDataFromAuth(auth *cliproxyauth.Auth) *kiroauth.KiroTokenData {
 // fetchMirasimQuota calls {base-url}/v1/limits with the mirasim Bearer key and
 // maps the response onto the normalized quota payload. The relay response
 // shape is vendor-specific, so the mapping tolerates the common variants
-// (remaining/total usage/limits at root or under "summary").
+// (remaining/total usage/limits at root or under "summary"). Mirasim OAuth
+// auth files take the signed relay control call instead of the plain Bearer.
 func (h *Handler) fetchMirasimQuota(parentCtx context.Context, auth *cliproxyauth.Auth) (pluginapi.QuotaFetchResponse, bool, error) {
+	ctx, cancel := context.WithTimeout(parentCtx, nativeQuotaTimeout)
+	defer cancel()
+
+	// OAuth auth file: signed control-plane GET /v1/limits (the relay's
+	// protocol for OAuth-issued tokens); api-key entries keep the plain path.
+	if isMirasimOAuthAuthFile(auth) {
+		storage := mirasimauth.StorageFromMetadata(auth.Metadata)
+		storage.NormalizeEndpoints()
+		proxyURL := ""
+		if auth != nil && strings.TrimSpace(auth.ProxyURL) != "" {
+			proxyURL = strings.TrimSpace(auth.ProxyURL)
+		} else if h != nil && h.cfg != nil {
+			proxyURL = strings.TrimSpace(h.cfg.ProxyURL)
+		}
+		client, errClient := mirasimauth.NewRelayClient(&storage, proxyURL)
+		if errClient != nil {
+			return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("mirasim quota probe: %w", errClient)
+		}
+		body, err := client.FetchLimits(ctx)
+		if err != nil {
+			return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("mirasim quota probe failed: %w", err)
+		}
+		return mapMirasimLimits(body), true, nil
+	}
+
 	var apiKey, baseURL string
 	if auth != nil && auth.Attributes != nil {
 		apiKey = strings.TrimSpace(auth.Attributes["api_key"])
@@ -139,8 +166,6 @@ func (h *Handler) fetchMirasimQuota(parentCtx context.Context, auth *cliproxyaut
 		return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("mirasim: base-url is required for the quota probe; check the credential's api-keys entry")
 	}
 
-	ctx, cancel := context.WithTimeout(parentCtx, nativeQuotaTimeout)
-	defer cancel()
 	url := strings.TrimSuffix(baseURL, "/") + "/v1/limits"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, bytes.NewReader(nil))
 	if err != nil {
@@ -166,6 +191,24 @@ func (h *Handler) fetchMirasimQuota(parentCtx context.Context, auth *cliproxyaut
 		return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("mirasim quota probe returned status %d: %s", resp.StatusCode, string(body))
 	}
 	return mapMirasimLimits(body), true, nil
+}
+
+// isMirasimOAuthAuthFile reports whether the credential is a mirasim OAuth
+// auth file (mirasim provider with the oauth kind and a device identity in
+// metadata), as opposed to an api-keys.mirasim entry.
+func isMirasimOAuthAuthFile(auth *cliproxyauth.Auth) bool {
+	if auth == nil || auth.Metadata == nil {
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSpace(auth.Provider), mirasimauth.Provider) {
+		return false
+	}
+	kind, _ := auth.Metadata["auth_kind"].(string)
+	if !strings.EqualFold(strings.TrimSpace(kind), "oauth") {
+		return false
+	}
+	deviceKey, _ := auth.Metadata["device_private_key"].(string)
+	return strings.TrimSpace(deviceKey) != ""
 }
 
 // mirasimLimitsPayload tolerates relay response variants for /v1/limits.
