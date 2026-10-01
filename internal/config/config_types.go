@@ -852,6 +852,22 @@ type MirasimKey = ClaudeKey
 // MirasimModel uses the Claude model mapping structure for Mirasim models.
 type MirasimModel = ClaudeModel
 
+// CommandcodeKey uses the Claude API key structure for Commandcode relay
+// entries (OpenAI chat-completions upstream at api.commandcode.ai + static
+// Bearer key). The base URL defaults to the public endpoint when omitted.
+type CommandcodeKey = ClaudeKey
+
+// CommandcodeModel uses the Claude model mapping structure for Commandcode models.
+type CommandcodeModel = ClaudeModel
+
+// OpencodeGoKey uses the Claude API key structure for OpenCode Go relay
+// entries (OpenAI chat-completions upstream at opencode.ai/zen/go + static
+// Bearer key). The base URL defaults to the public endpoint when omitted.
+type OpencodeGoKey = ClaudeKey
+
+// OpencodeGoModel uses the Claude model mapping structure for OpenCode Go models.
+type OpencodeGoModel = ClaudeModel
+
 // GeminiKey represents the configuration for a Gemini API key,
 // including optional overrides for upstream base URL, proxy routing, and headers.
 type GeminiKey struct {

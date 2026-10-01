@@ -354,6 +354,80 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 		}
 	}
 
+	// Commandcode keys (do not print key material)
+	if len(oldCfg.CommandcodeKey) != len(newCfg.CommandcodeKey) {
+		changes = append(changes, fmt.Sprintf("commandcode-api-key count: %d -> %d", len(oldCfg.CommandcodeKey), len(newCfg.CommandcodeKey)))
+	} else {
+		for i := range oldCfg.CommandcodeKey {
+			o := oldCfg.CommandcodeKey[i]
+			n := newCfg.CommandcodeKey[i]
+			if strings.TrimSpace(o.BaseURL) != strings.TrimSpace(n.BaseURL) {
+				changes = append(changes, fmt.Sprintf("commandcode[%d].base-url: %s -> %s", i, formatURL(o.BaseURL), formatURL(n.BaseURL)))
+			}
+			if strings.TrimSpace(o.ProxyURL) != strings.TrimSpace(n.ProxyURL) {
+				changes = append(changes, fmt.Sprintf("commandcode[%d].proxy-url: %s -> %s", i, formatProxyURL(o.ProxyURL), formatProxyURL(n.ProxyURL)))
+			}
+			if strings.TrimSpace(o.Prefix) != strings.TrimSpace(n.Prefix) {
+				changes = append(changes, fmt.Sprintf("commandcode[%d].prefix: %s -> %s", i, strings.TrimSpace(o.Prefix), strings.TrimSpace(n.Prefix)))
+			}
+			changes = appendOptionalBoolChange(changes, fmt.Sprintf("commandcode[%d].disable-cooling", i), o.DisableCooling, n.DisableCooling)
+			if strings.TrimSpace(o.APIKey) != strings.TrimSpace(n.APIKey) {
+				changes = append(changes, fmt.Sprintf("commandcode[%d].api-key: updated", i))
+			}
+			if !equalStringMap(o.Headers, n.Headers) {
+				changes = append(changes, fmt.Sprintf("commandcode[%d].headers: updated", i))
+			}
+			oldModels := SummarizeClaudeModels(o.Models)
+			newModels := SummarizeClaudeModels(n.Models)
+			if oldModels.hash != newModels.hash {
+				changes = append(changes, fmt.Sprintf("commandcode[%d].models: updated (%d -> %d entries)", i, oldModels.count, newModels.count))
+			}
+			oldExcluded := SummarizeExcludedModels(o.ExcludedModels)
+			newExcluded := SummarizeExcludedModels(n.ExcludedModels)
+			if oldExcluded.hash != newExcluded.hash {
+				changes = append(changes, fmt.Sprintf("commandcode[%d].excluded-models: updated (%d -> %d entries)", i, oldExcluded.count, newExcluded.count))
+			}
+			changes = appendOptionalIntChange(changes, fmt.Sprintf("commandcode[%d].request-retry", i), o.RequestRetry, n.RequestRetry)
+		}
+	}
+
+	// OpenCode Go keys (do not print key material)
+	if len(oldCfg.OpencodeGoKey) != len(newCfg.OpencodeGoKey) {
+		changes = append(changes, fmt.Sprintf("opencode-go-api-key count: %d -> %d", len(oldCfg.OpencodeGoKey), len(newCfg.OpencodeGoKey)))
+	} else {
+		for i := range oldCfg.OpencodeGoKey {
+			o := oldCfg.OpencodeGoKey[i]
+			n := newCfg.OpencodeGoKey[i]
+			if strings.TrimSpace(o.BaseURL) != strings.TrimSpace(n.BaseURL) {
+				changes = append(changes, fmt.Sprintf("opencode-go[%d].base-url: %s -> %s", i, formatURL(o.BaseURL), formatURL(n.BaseURL)))
+			}
+			if strings.TrimSpace(o.ProxyURL) != strings.TrimSpace(n.ProxyURL) {
+				changes = append(changes, fmt.Sprintf("opencode-go[%d].proxy-url: %s -> %s", i, formatProxyURL(o.ProxyURL), formatProxyURL(n.ProxyURL)))
+			}
+			if strings.TrimSpace(o.Prefix) != strings.TrimSpace(n.Prefix) {
+				changes = append(changes, fmt.Sprintf("opencode-go[%d].prefix: %s -> %s", i, strings.TrimSpace(o.Prefix), strings.TrimSpace(n.Prefix)))
+			}
+			changes = appendOptionalBoolChange(changes, fmt.Sprintf("opencode-go[%d].disable-cooling", i), o.DisableCooling, n.DisableCooling)
+			if strings.TrimSpace(o.APIKey) != strings.TrimSpace(n.APIKey) {
+				changes = append(changes, fmt.Sprintf("opencode-go[%d].api-key: updated", i))
+			}
+			if !equalStringMap(o.Headers, n.Headers) {
+				changes = append(changes, fmt.Sprintf("opencode-go[%d].headers: updated", i))
+			}
+			oldModels := SummarizeClaudeModels(o.Models)
+			newModels := SummarizeClaudeModels(n.Models)
+			if oldModels.hash != newModels.hash {
+				changes = append(changes, fmt.Sprintf("opencode-go[%d].models: updated (%d -> %d entries)", i, oldModels.count, newModels.count))
+			}
+			oldExcluded := SummarizeExcludedModels(o.ExcludedModels)
+			newExcluded := SummarizeExcludedModels(n.ExcludedModels)
+			if oldExcluded.hash != newExcluded.hash {
+				changes = append(changes, fmt.Sprintf("opencode-go[%d].excluded-models: updated (%d -> %d entries)", i, oldExcluded.count, newExcluded.count))
+			}
+			changes = appendOptionalIntChange(changes, fmt.Sprintf("opencode-go[%d].request-retry", i), o.RequestRetry, n.RequestRetry)
+		}
+	}
+
 	// Codex keys (do not print key material)
 	if len(oldCfg.CodexKey) != len(newCfg.CodexKey) {
 		changes = append(changes, fmt.Sprintf("codex-api-key count: %d -> %d", len(oldCfg.CodexKey), len(newCfg.CodexKey)))

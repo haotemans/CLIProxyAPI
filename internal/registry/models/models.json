@@ -5684,5 +5684,172 @@
         "text"
       ]
     }
+  ],
+  "commandcode": [
+    {
+      "id": "deepseek/deepseek-v4.1-flash",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "deepseek",
+      "type": "commandcode",
+      "display_name": "DeepSeek V4.1 Flash via CommandCode",
+      "description": "DeepSeek V4.1 Flash served by CommandCode (OpenAI chat completions relay)",
+      "context_length": 262144,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "levels": [
+          "none",
+          "auto",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "z-ai/glm-5.3-flash",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "z-ai",
+      "type": "commandcode",
+      "display_name": "GLM 5.3 Flash via CommandCode",
+      "description": "GLM 5.3 Flash served by CommandCode (OpenAI chat completions relay)",
+      "context_length": 262144,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "levels": [
+          "none",
+          "auto",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    }
+  ],
+  "opencode-go": [
+    {
+      "id": "kimi-k3",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "moonshotai",
+      "type": "opencode-go",
+      "display_name": "Kimi K3 via OpenCode Go",
+      "description": "Kimi K3 served by OpenCode Go (OpenAI chat completions relay)",
+      "context_length": 262144,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "levels": [
+          "none",
+          "auto",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "glm-5.3",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "z-ai",
+      "type": "opencode-go",
+      "display_name": "GLM 5.3 via OpenCode Go",
+      "description": "GLM 5.3 served by OpenCode Go (OpenAI chat completions relay)",
+      "context_length": 262144,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "levels": [
+          "none",
+          "auto",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "big-pickle",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "opencode",
+      "type": "opencode-go",
+      "display_name": "Big Pickle via OpenCode Go",
+      "description": "Big Pickle, OpenCode's flagship relay alias for complex agent work",
+      "context_length": 262144,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "levels": [
+          "none",
+          "auto",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "dynamic_allowed": true
+      },
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    },
+    {
+      "id": "grok-code-fast-1",
+      "object": "model",
+      "created": 1788307200,
+      "owned_by": "x-ai",
+      "type": "opencode-go",
+      "display_name": "Grok Code Fast 1 via OpenCode Go",
+      "description": "Grok Code Fast 1 served by OpenCode Go (free with per-IP rate limits)",
+      "context_length": 262144,
+      "max_completion_tokens": 65536,
+      "supportedInputModalities": [
+        "text",
+        "image"
+      ],
+      "supportedOutputModalities": [
+        "text"
+      ]
+    }
   ]
 }

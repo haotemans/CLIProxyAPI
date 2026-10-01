@@ -65,6 +65,12 @@ type APIKeyClientResult struct {
 	// MirasimKeyCount is the number of Mirasim API keys loaded
 	MirasimKeyCount int
 
+	// CommandcodeKeyCount is the number of Commandcode relay API keys loaded
+	CommandcodeKeyCount int
+
+	// OpencodeGoKeyCount is the number of OpenCode Go relay API keys loaded
+	OpencodeGoKeyCount int
+
 	// CodexKeyCount is the number of Codex API keys loaded
 	CodexKeyCount int
 

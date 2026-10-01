@@ -464,6 +464,14 @@ func configuredModelAliasEntries(cfg *internalconfig.Config, auth *Auth) []model
 		if entry := resolveMirasimAPIKeyConfig(cfg, auth); entry != nil {
 			models = asModelAliasEntries(entry.Models)
 		}
+	case "commandcode":
+		if entry := resolveCommandcodeAPIKeyConfig(cfg, auth); entry != nil {
+			models = asModelAliasEntries(entry.Models)
+		}
+	case "opencode-go":
+		if entry := resolveOpencodeGoAPIKeyConfig(cfg, auth); entry != nil {
+			models = asModelAliasEntries(entry.Models)
+		}
 	case "codex":
 		if entry := resolveCodexAPIKeyConfig(cfg, auth); entry != nil {
 			models = asModelAliasEntries(entry.Models)
@@ -628,6 +636,14 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
 			if entry := resolveMirasimAPIKeyConfig(cfg, auth); entry != nil {
 				compileAPIKeyModelAliasForModels(byAlias, entry.Models)
 			}
+		case "commandcode":
+			if entry := resolveCommandcodeAPIKeyConfig(cfg, auth); entry != nil {
+				compileAPIKeyModelAliasForModels(byAlias, entry.Models)
+			}
+		case "opencode-go":
+			if entry := resolveOpencodeGoAPIKeyConfig(cfg, auth); entry != nil {
+				compileAPIKeyModelAliasForModels(byAlias, entry.Models)
+			}
 		case "codex":
 			if entry := resolveCodexAPIKeyConfig(cfg, auth); entry != nil {
 				compileAPIKeyModelAliasForModels(byAlias, entry.Models)
@@ -760,6 +776,10 @@ func (m *Manager) applyAPIKeyModelAliasWithRouting(routing *apiKeyModelRoutingSn
 		upstreamModel = resolveUpstreamModelForClaudeAPIKey(cfg, auth, requestedModel)
 	case "mirasim":
 		upstreamModel = resolveUpstreamModelForMirasimAPIKey(cfg, auth, requestedModel)
+	case "commandcode":
+		upstreamModel = resolveUpstreamModelForCommandcodeAPIKey(cfg, auth, requestedModel)
+	case "opencode-go":
+		upstreamModel = resolveUpstreamModelForOpencodeGoAPIKey(cfg, auth, requestedModel)
 	case "codex":
 		upstreamModel = resolveUpstreamModelForCodexAPIKey(cfg, auth, requestedModel)
 	case "xai":
@@ -861,6 +881,20 @@ func resolveMirasimAPIKeyConfig(cfg *internalconfig.Config, auth *Auth) *interna
 	return resolveAPIKeyConfig(cfg.MirasimKey, auth)
 }
 
+func resolveCommandcodeAPIKeyConfig(cfg *internalconfig.Config, auth *Auth) *internalconfig.CommandcodeKey {
+	if cfg == nil {
+		return nil
+	}
+	return resolveAPIKeyConfig(cfg.CommandcodeKey, auth)
+}
+
+func resolveOpencodeGoAPIKeyConfig(cfg *internalconfig.Config, auth *Auth) *internalconfig.OpencodeGoKey {
+	if cfg == nil {
+		return nil
+	}
+	return resolveAPIKeyConfig(cfg.OpencodeGoKey, auth)
+}
+
 func resolveCodexAPIKeyConfig(cfg *internalconfig.Config, auth *Auth) *internalconfig.CodexKey {
 	if cfg == nil {
 		return nil
@@ -915,6 +949,22 @@ func resolveUpstreamModelForClaudeAPIKey(cfg *internalconfig.Config, auth *Auth,
 
 func resolveUpstreamModelForMirasimAPIKey(cfg *internalconfig.Config, auth *Auth, requestedModel string) string {
 	entry := resolveMirasimAPIKeyConfig(cfg, auth)
+	if entry == nil {
+		return ""
+	}
+	return resolveModelAliasFromConfigModels(requestedModel, asModelAliasEntries(entry.Models))
+}
+
+func resolveUpstreamModelForCommandcodeAPIKey(cfg *internalconfig.Config, auth *Auth, requestedModel string) string {
+	entry := resolveCommandcodeAPIKeyConfig(cfg, auth)
+	if entry == nil {
+		return ""
+	}
+	return resolveModelAliasFromConfigModels(requestedModel, asModelAliasEntries(entry.Models))
+}
+
+func resolveUpstreamModelForOpencodeGoAPIKey(cfg *internalconfig.Config, auth *Auth, requestedModel string) string {
+	entry := resolveOpencodeGoAPIKeyConfig(cfg, auth)
 	if entry == nil {
 		return ""
 	}

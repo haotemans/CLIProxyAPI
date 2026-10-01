@@ -32,6 +32,14 @@ type MetaModel = internalconfig.MetaModel
 type ClaudeKey = internalconfig.ClaudeKey
 type MirasimKey = internalconfig.MirasimKey
 type MirasimModel = internalconfig.MirasimModel
+
+// CommandcodeKey/CommandcodeModel alias the Commandcode relay entries.
+type CommandcodeKey = internalconfig.CommandcodeKey
+type CommandcodeModel = internalconfig.CommandcodeModel
+
+// OpencodeGoKey/OpencodeGoModel alias the OpenCode Go relay entries.
+type OpencodeGoKey = internalconfig.OpencodeGoKey
+type OpencodeGoModel = internalconfig.OpencodeGoModel
 type VertexCompatKey = internalconfig.VertexCompatKey
 type VertexCompatModel = internalconfig.VertexCompatModel
 type OpenAICompatibility = internalconfig.OpenAICompatibility

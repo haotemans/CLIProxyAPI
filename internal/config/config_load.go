@@ -194,6 +194,12 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	// Sanitize Mirasim keys: drop entries without base-url
 	cfg.SanitizeMirasimKeys()
 
+	// Sanitize Commandcode keys: default the base-url when omitted
+	cfg.SanitizeCommandcodeKeys()
+
+	// Sanitize OpenCode Go keys: default the base-url when omitted
+	cfg.SanitizeOpencodeGoKeys()
+
 	// Sanitize OpenAI compatibility providers: drop entries without base-url
 	cfg.SanitizeOpenAICompatibility()
 

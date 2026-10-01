@@ -389,6 +389,18 @@ func compileAPIKeyModelCapabilitiesForAuth(cfg *internalconfig.Config, auth *Aut
 		if entry := resolveMirasimAPIKeyConfig(cfg, auth); entry != nil {
 			compileConfiguredModelCapabilities(out, entry.Models, "claude")
 		}
+	case "commandcode":
+		// Commandcode relays speak OpenAI chat completions with reasoning
+		// passthrough; capability resolution shares the codex model type.
+		if entry := resolveCommandcodeAPIKeyConfig(cfg, auth); entry != nil {
+			compileConfiguredModelCapabilities(out, entry.Models, "codex")
+		}
+	case "opencode-go":
+		// OpenCode Go relays speak OpenAI chat completions with reasoning
+		// passthrough; capability resolution shares the codex model type.
+		if entry := resolveOpencodeGoAPIKeyConfig(cfg, auth); entry != nil {
+			compileConfiguredModelCapabilities(out, entry.Models, "codex")
+		}
 	case "codex":
 		if entry := resolveCodexAPIKeyConfig(cfg, auth); entry != nil {
 			for i := range entry.Models {

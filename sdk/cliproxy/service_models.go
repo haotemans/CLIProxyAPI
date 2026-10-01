@@ -138,6 +138,32 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 			}
 		}
 		models = applyExcludedModels(models, excluded)
+	case "commandcode":
+		// Commandcode relays speak OpenAI chat completions; the static catalog is
+		// the default until the config lists models for a credential.
+		models = registry.GetCommandcodeModels()
+		if entry := s.resolveConfigCommandcodeKey(a); entry != nil {
+			if len(entry.Models) > 0 {
+				models = buildCommandcodeConfigModels(entry)
+			}
+			if authKind == "apikey" {
+				excluded = entry.ExcludedModels
+			}
+		}
+		models = applyExcludedModels(models, excluded)
+	case "opencode-go":
+		// OpenCode Go relays speak OpenAI chat completions; same config-driven
+		// narrowing as commandcode.
+		models = registry.GetOpencodeGoModels()
+		if entry := s.resolveConfigOpencodeGoKey(a); entry != nil {
+			if len(entry.Models) > 0 {
+				models = buildOpencodeGoConfigModels(entry)
+			}
+			if authKind == "apikey" {
+				excluded = entry.ExcludedModels
+			}
+		}
+		models = applyExcludedModels(models, excluded)
 	case "codex":
 		if authKind == "apikey" {
 			if entry := s.resolveConfigCodexKey(a); entry != nil {
@@ -440,6 +466,22 @@ func (s *Service) resolveConfigMirasimKey(auth *coreauth.Auth) *config.MirasimKe
 		return nil
 	}
 	return resolveConfigClaudeStyleKey(auth, s.cfg.MirasimKey)
+}
+
+// resolveConfigCommandcodeKey locates the Commandcode config entry backing an auth.
+func (s *Service) resolveConfigCommandcodeKey(auth *coreauth.Auth) *config.CommandcodeKey {
+	if s == nil || s.cfg == nil {
+		return nil
+	}
+	return resolveConfigClaudeStyleKey(auth, s.cfg.CommandcodeKey)
+}
+
+// resolveConfigOpencodeGoKey locates the OpenCode Go config entry backing an auth.
+func (s *Service) resolveConfigOpencodeGoKey(auth *coreauth.Auth) *config.OpencodeGoKey {
+	if s == nil || s.cfg == nil {
+		return nil
+	}
+	return resolveConfigClaudeStyleKey(auth, s.cfg.OpencodeGoKey)
 }
 
 func resolveConfigClaudeStyleKey(auth *coreauth.Auth, entries []config.ClaudeKey) *config.ClaudeKey {
@@ -944,6 +986,24 @@ func buildMirasimConfigModels(entry *config.MirasimKey) []*ModelInfo {
 	// Mirasim models reuse the claude wire type and registry channel; only the
 	// catalog owner differs so model listings attribute them to Mirasim.
 	return buildConfigModels(entry.Models, "mirasim", "claude", "claude")
+}
+
+// buildCommandcodeConfigModels converts config-listed Commandcode models.
+func buildCommandcodeConfigModels(entry *config.CommandcodeKey) []*ModelInfo {
+	if entry == nil {
+		return nil
+	}
+	// Commandcode relays speak OpenAI chat completions; wire type and metadata
+	// channel follow the codex/OpenAI conventions.
+	return buildConfigModels(entry.Models, "commandcode", "codex", "codex")
+}
+
+// buildOpencodeGoConfigModels converts config-listed OpenCode Go models.
+func buildOpencodeGoConfigModels(entry *config.OpencodeGoKey) []*ModelInfo {
+	if entry == nil {
+		return nil
+	}
+	return buildConfigModels(entry.Models, "opencode-go", "codex", "codex")
 }
 
 // buildClineDetectedModels converts the per-account detected Cline catalog

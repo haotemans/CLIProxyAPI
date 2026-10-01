@@ -217,6 +217,8 @@ func baselineExecutorAuths() []*coreauth.Auth {
 		"cline",
 		"cursor",
 		"kiro",
+		"commandcode",
+		"opencode-go",
 		"openai-compatibility",
 	}
 	auths := make([]*coreauth.Auth, 0, len(providers))
@@ -300,6 +302,10 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
 		s.coreManager.RegisterExecutor(executor.NewClaudeExecutor(cfg))
 	case "mirasim":
 		s.coreManager.RegisterExecutor(executor.NewMirasimExecutor(cfg))
+	case "commandcode":
+		s.coreManager.RegisterExecutor(executor.NewOpenAICompatExecutor("commandcode", cfg))
+	case "opencode-go":
+		s.coreManager.RegisterExecutor(executor.NewOpenAICompatExecutor("opencode-go", cfg))
 	case "kimi", "kimi-ai", "kimi.ai", "kimi.com":
 		s.coreManager.RegisterExecutor(executor.NewKimiExecutor(cfg))
 	case "xai":

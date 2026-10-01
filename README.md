@@ -7,6 +7,8 @@ Personal fork of [router-for-me/CLIProxyAPI](https://github.com/router-for-me/CL
 ## What this fork adds
 
 - **Mirasim provider** — first-class `mirasim` API-key provider for Anthropic-protocol reverse proxies (Bearer key, mandatory `base-url`, models fall back to the Claude catalog, alias mapping, thinking config, full Management API and panel support).
+- **Commandcode provider** — first-class `commandcode` API-key provider for the Commandcode relay (OpenAI chat-completions at `https://api.commandcode.ai/provider/v1`, Bearer key, default base-url, built-in catalog `deepseek/deepseek-v4.1-flash` + `z-ai/glm-5.3-flash`, reasoning backfill from `reasoning`/`reasoning_details`, full Management API and panel support).
+- **OpenCode Go provider** — first-class `opencode-go` API-key provider for the OpenCode Zen Go relay (OpenAI chat-completions at `https://opencode.ai/zen/go/v1`, Bearer key, default base-url, built-in catalog `kimi-k3` / `glm-5.3` / `big-pickle` / `grok-code-fast-1`, full Management API and panel support).
 - **Cline provider** — first-class `cline` OAuth provider: WorkOS device-flow login (`--cline-login`, Management API, TUI), rotating token refresh, and **first-import model detection** so each account only advertises the models it can actually use (probed from `api.cline.bot`, persisted into the credential file).
 - **Cursor provider** — first-class `cursor` OAuth provider: PKCE URL-poll login (`--cursor-login`, Management API, TUI — no local callback, works headless), automatic token refresh, per-account model discovery via `GetUsableModels`, streaming + tool calling over Cursor's Connect/protobuf agent RPC.
 - **Kiro provider** — first-class `kiro` OAuth provider (AWS Kiro / CodeWhisperer): AWS Builder ID device-code login (`--kiro-login`, works headless), authorization-code login, IAM Identity Center login, Kiro IDE token import, dynamic per-account model discovery with `-agentic` variants, token refresh via SSO OIDC, and the full Connect EventStream executor with tool calling and thinking support.
@@ -47,6 +49,22 @@ api-keys:
       models:
         - name: "claude-opus-4-1-20250805"
           alias: "mira-opus"
+```
+
+Commandcode / OpenCode Go relays in `config.yaml` (base-url optional, defaults shown):
+
+```yaml
+api-keys:
+  commandcode:
+    - name: commandcode-1
+      base-url: "https://api.commandcode.ai/provider/v1"
+      keys:
+        - api-key: "your-commandcode-key"
+  opencode-go:
+    - name: opencode-go-1
+      base-url: "https://opencode.ai/zen/go/v1"
+      keys:
+        - api-key: "your-opencode-go-key"
 ```
 
 The HTTP API listens on `server.port` (default 8317) with OpenAI `/v1/chat/completions`, Anthropic `/v1/messages`, and Gemini endpoints; authenticate with any key from `access.api-keys`.

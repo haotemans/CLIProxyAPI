@@ -365,6 +365,150 @@ func TestLookupAPIKeyUpstreamModel_MirasimKey(t *testing.T) {
 	}
 }
 
+func TestLookupAPIKeyUpstreamModel_CommandcodeKey(t *testing.T) {
+	cfg := &internalconfig.Config{
+		CommandcodeKey: []internalconfig.CommandcodeKey{
+			{
+				APIKey:  "commandcode-key",
+				BaseURL: "https://api.commandcode.ai/provider/v1",
+				Models: []internalconfig.CommandcodeModel{
+					{Name: "deepseek/deepseek-v4.1-flash", Alias: "deepseek-flash"},
+				},
+			},
+		},
+	}
+
+	mgr := NewManager(nil, nil, nil)
+	mgr.SetConfig(cfg)
+
+	ctx := context.Background()
+	auth := &Auth{
+		ID:       "commandcode-auth-1",
+		Provider: "commandcode",
+		Attributes: map[string]string{
+			"api_key":   "commandcode-key",
+			"base_url":  "https://api.commandcode.ai/provider/v1",
+			"auth_kind": "apikey",
+		},
+	}
+	if _, err := mgr.Register(ctx, auth); err != nil {
+		t.Fatalf("register auth: %v", err)
+	}
+
+	// 1. Fast path: lookup per-auth mapping table compiled during register.
+	resolved := mgr.lookupAPIKeyUpstreamModel("commandcode-auth-1", "deepseek-flash")
+	if resolved != "deepseek/deepseek-v4.1-flash" {
+		t.Fatalf("lookupAPIKeyUpstreamModel() = %q, want deepseek/deepseek-v4.1-flash", resolved)
+	}
+
+	// 2. Slow path: directly call mgr.applyAPIKeyModelAliasWithRouting with an empty alias table to exercise config resolution fallback.
+	slowRouting := &apiKeyModelRoutingSnapshot{
+		config:  cfg,
+		aliases: make(apiKeyModelAliasTable),
+	}
+	slowResolved := mgr.applyAPIKeyModelAliasWithRouting(slowRouting, auth, "deepseek-flash")
+	if slowResolved != "deepseek/deepseek-v4.1-flash" {
+		t.Fatalf("applyAPIKeyModelAliasWithRouting(slow) = %q, want deepseek/deepseek-v4.1-flash", slowResolved)
+	}
+
+	// 3. Model alias result with force mapping / alias metadata
+	aliasResult := mgr.resolveAPIKeyModelAliasWithResult(auth, "deepseek-flash")
+	if aliasResult.UpstreamModel != "deepseek/deepseek-v4.1-flash" {
+		t.Fatalf("resolveAPIKeyModelAliasWithResult() upstream = %q, want deepseek/deepseek-v4.1-flash", aliasResult.UpstreamModel)
+	}
+
+	// 4. Configured alias entries helper
+	entries := configuredModelAliasEntries(cfg, auth)
+	found := false
+	for _, e := range entries {
+		if e.GetAlias() == "deepseek-flash" && e.GetName() == "deepseek/deepseek-v4.1-flash" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("configuredModelAliasEntries did not contain deepseek-flash -> deepseek/deepseek-v4.1-flash: %+v", entries)
+	}
+
+	// 5. Capability binding: thinking levels resolve through the codex model type.
+	req := mgr.attachResolvedAPIKeyModelInfo(cliproxyexecutor.Request{}, auth, "deepseek-flash", "deepseek/deepseek-v4.1-flash")
+	if _, ok := ResolvedAPIKeyModelInfo(req); !ok {
+		t.Fatalf("ResolvedAPIKeyModelInfo() not bound for commandcode auth")
+	}
+}
+
+func TestLookupAPIKeyUpstreamModel_OpencodeGoKey(t *testing.T) {
+	cfg := &internalconfig.Config{
+		OpencodeGoKey: []internalconfig.OpencodeGoKey{
+			{
+				APIKey:  "opencode-go-key",
+				BaseURL: "https://opencode.ai/zen/go/v1",
+				Models: []internalconfig.OpencodeGoModel{
+					{Name: "kimi-k3", Alias: "k3"},
+				},
+			},
+		},
+	}
+
+	mgr := NewManager(nil, nil, nil)
+	mgr.SetConfig(cfg)
+
+	ctx := context.Background()
+	auth := &Auth{
+		ID:       "opencode-go-auth-1",
+		Provider: "opencode-go",
+		Attributes: map[string]string{
+			"api_key":   "opencode-go-key",
+			"base_url":  "https://opencode.ai/zen/go/v1",
+			"auth_kind": "apikey",
+		},
+	}
+	if _, err := mgr.Register(ctx, auth); err != nil {
+		t.Fatalf("register auth: %v", err)
+	}
+
+	// 1. Fast path: lookup per-auth mapping table compiled during register.
+	resolved := mgr.lookupAPIKeyUpstreamModel("opencode-go-auth-1", "k3")
+	if resolved != "kimi-k3" {
+		t.Fatalf("lookupAPIKeyUpstreamModel() = %q, want kimi-k3", resolved)
+	}
+
+	// 2. Slow path: directly call mgr.applyAPIKeyModelAliasWithRouting with an empty alias table to exercise config resolution fallback.
+	slowRouting := &apiKeyModelRoutingSnapshot{
+		config:  cfg,
+		aliases: make(apiKeyModelAliasTable),
+	}
+	slowResolved := mgr.applyAPIKeyModelAliasWithRouting(slowRouting, auth, "k3")
+	if slowResolved != "kimi-k3" {
+		t.Fatalf("applyAPIKeyModelAliasWithRouting(slow) = %q, want kimi-k3", slowResolved)
+	}
+
+	// 3. Model alias result with force mapping / alias metadata
+	aliasResult := mgr.resolveAPIKeyModelAliasWithResult(auth, "k3")
+	if aliasResult.UpstreamModel != "kimi-k3" {
+		t.Fatalf("resolveAPIKeyModelAliasWithResult() upstream = %q, want kimi-k3", aliasResult.UpstreamModel)
+	}
+
+	// 4. Configured alias entries helper
+	entries := configuredModelAliasEntries(cfg, auth)
+	found := false
+	for _, e := range entries {
+		if e.GetAlias() == "k3" && e.GetName() == "kimi-k3" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("configuredModelAliasEntries did not contain k3 -> kimi-k3: %+v", entries)
+	}
+
+	// 5. Capability binding: thinking levels resolve through the codex model type.
+	req := mgr.attachResolvedAPIKeyModelInfo(cliproxyexecutor.Request{}, auth, "k3", "kimi-k3")
+	if _, ok := ResolvedAPIKeyModelInfo(req); !ok {
+		t.Fatalf("ResolvedAPIKeyModelInfo() not bound for opencode-go auth")
+	}
+}
+
 func TestLookupAPIKeyUpstreamModel_MetaKey(t *testing.T) {
 	cfg := &internalconfig.Config{
 		MetaKey: []internalconfig.MetaKey{

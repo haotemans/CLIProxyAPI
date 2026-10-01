@@ -23,6 +23,8 @@ var nativeProviderAppliers = map[string]ProviderApplier{
 	"gemini":      nil,
 	"claude":      nil,
 	"mirasim":     nil,
+	"commandcode": nil,
+	"opencode-go": nil,
 	"openai":      nil,
 	"codex":       nil,
 	"antigravity": nil,

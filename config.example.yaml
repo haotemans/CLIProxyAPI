@@ -619,6 +619,46 @@ requests:
 #         - api-key: "mirasim-sk-..."
 #           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
 #
+#   # Commandcode API keys
+#   # Commandcode relay (commandcode.ai); it speaks the OpenAI chat-completions API
+#   # (POST {base-url}/chat/completions) with a static Bearer API key.
+#   # base-url is optional and defaults to https://api.commandcode.ai/provider/v1.
+#   # When models is omitted, the built-in Commandcode catalog is advertised
+#   # (deepseek/deepseek-v4.1-flash, z-ai/glm-5.3-flash).
+#
+#   commandcode:
+#     - name: commandcode-1
+#       prefix: "commandcode" # optional: require calls like "commandcode/glm-5.3-flash" to target this credential
+#       base-url: "https://api.commandcode.ai/provider/v1" # optional: defaults to the public endpoint
+#       proxy-url: "socks5://proxy.example.com:1080" # optional: per-key proxy override
+#       models:
+#         - name: "deepseek/deepseek-v4.1-flash" # upstream model name
+#           alias: "deepseek-v4.1-flash"         # client alias mapped to the upstream model
+#         - name: "z-ai/glm-5.3-flash"
+#           alias: "glm-5.3-flash"
+#       keys:
+#         - api-key: "commandcode-sk-..."
+#           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
+#
+#   # OpenCode Go API keys
+#   # OpenCode Go relay (opencode.ai Zen Go); it speaks the OpenAI chat-completions
+#   # API (POST {base-url}/chat/completions) with a static Bearer API key.
+#   # base-url is optional and defaults to https://opencode.ai/zen/go/v1.
+#   # When models is omitted, the built-in OpenCode Go catalog is advertised
+#   # (kimi-k3, glm-5.3, big-pickle, grok-code-fast-1).
+#
+#   opencode-go:
+#     - name: opencode-go-1
+#       prefix: "opencode-go" # optional: require calls like "opencode-go/kimi-k3" to target this credential
+#       base-url: "https://opencode.ai/zen/go/v1" # optional: defaults to the public endpoint
+#       proxy-url: "socks5://proxy.example.com:1080" # optional: per-key proxy override
+#       models:
+#         - name: "kimi-k3"  # upstream model name
+#           alias: "kimi-k3" # client alias mapped to the upstream model
+#       keys:
+#         - api-key: "opencode-go-sk-..."
+#           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
+#
 #   # xAI API keys
 #   # Uses the native xAI executor, including its Responses namespace-tool handling.
 #

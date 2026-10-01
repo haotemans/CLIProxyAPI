@@ -274,6 +274,71 @@ func (cfg *Config) SanitizeMirasimKeys() {
 	cfg.MirasimKey = out
 }
 
+// commandcodeDefaultBaseURL is the public Commandcode upstream root.
+const commandcodeDefaultBaseURL = "https://api.commandcode.ai/provider/v1"
+
+// opencodeGoDefaultBaseURL is the public OpenCode Go upstream root.
+const opencodeGoDefaultBaseURL = "https://opencode.ai/zen/go/v1"
+
+// SanitizeCommandcodeKeys normalizes Commandcode API key entries: the base
+// URL defaults to the public endpoint, and entries without an API key are
+// dropped. Claude-only fingerprint knobs do not apply.
+func (cfg *Config) SanitizeCommandcodeKeys() {
+	if cfg == nil || len(cfg.CommandcodeKey) == 0 {
+		return
+	}
+	out := make([]CommandcodeKey, 0, len(cfg.CommandcodeKey))
+	for i := range cfg.CommandcodeKey {
+		e := cfg.CommandcodeKey[i]
+		e.APIKey = strings.TrimSpace(e.APIKey)
+		e.ProxyURL = strings.TrimSpace(e.ProxyURL)
+		e.Prefix = normalizeModelPrefix(e.Prefix)
+		e.BaseURL = strings.TrimSpace(e.BaseURL)
+		if e.BaseURL == "" {
+			e.BaseURL = commandcodeDefaultBaseURL
+		}
+		e.Headers = NormalizeHeaders(e.Headers)
+		e.ExcludedModels = NormalizeExcludedModels(e.ExcludedModels)
+		e.Cloak = nil
+		e.FingerprintProfile = ""
+		e.ExperimentalCCHSigning = false
+		if e.APIKey == "" {
+			continue
+		}
+		out = append(out, e)
+	}
+	cfg.CommandcodeKey = out
+}
+
+// SanitizeOpencodeGoKeys normalizes OpenCode Go API key entries: the base URL
+// defaults to the public endpoint, and entries without an API key are dropped.
+func (cfg *Config) SanitizeOpencodeGoKeys() {
+	if cfg == nil || len(cfg.OpencodeGoKey) == 0 {
+		return
+	}
+	out := make([]OpencodeGoKey, 0, len(cfg.OpencodeGoKey))
+	for i := range cfg.OpencodeGoKey {
+		e := cfg.OpencodeGoKey[i]
+		e.APIKey = strings.TrimSpace(e.APIKey)
+		e.ProxyURL = strings.TrimSpace(e.ProxyURL)
+		e.Prefix = normalizeModelPrefix(e.Prefix)
+		e.BaseURL = strings.TrimSpace(e.BaseURL)
+		if e.BaseURL == "" {
+			e.BaseURL = opencodeGoDefaultBaseURL
+		}
+		e.Headers = NormalizeHeaders(e.Headers)
+		e.ExcludedModels = NormalizeExcludedModels(e.ExcludedModels)
+		e.Cloak = nil
+		e.FingerprintProfile = ""
+		e.ExperimentalCCHSigning = false
+		if e.APIKey == "" {
+			continue
+		}
+		out = append(out, e)
+	}
+	cfg.OpencodeGoKey = out
+}
+
 func sanitizeMetaKeyEntries(entries []MetaKey) []MetaKey {
 	if len(entries) == 0 {
 		return entries

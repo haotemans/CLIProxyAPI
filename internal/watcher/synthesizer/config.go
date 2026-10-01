@@ -50,6 +50,10 @@ func (s *ConfigSynthesizer) Synthesize(ctx *SynthesisContext) ([]*coreauth.Auth,
 	out = append(out, s.synthesizeClaudeKeys(ctx)...)
 	// Mirasim API Keys
 	out = append(out, s.synthesizeMirasimKeys(ctx)...)
+	// Commandcode API Keys
+	out = append(out, s.synthesizeCommandcodeKeys(ctx)...)
+	// OpenCode Go API Keys
+	out = append(out, s.synthesizeOpencodeGoKeys(ctx)...)
 	// Codex API Keys
 	out = append(out, s.synthesizeCodexKeys(ctx)...)
 	// xAI API Keys
@@ -252,6 +256,124 @@ func (s *ConfigSynthesizer) synthesizeMirasimKeys(ctx *SynthesisContext) []*core
 			ID:         id,
 			Provider:   "mirasim",
 			Label:      "mirasim-apikey",
+			Prefix:     prefix,
+			Status:     coreauth.StatusActive,
+			ProxyURL:   proxyURL,
+			Attributes: attrs,
+			Metadata:   metadata,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}
+		ApplyAuthExcludedModelsMeta(a, cfg, mk.ExcludedModels, "apikey")
+		if len(a.Metadata) == 0 {
+			a.Metadata = nil
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// synthesizeCommandcodeKeys creates Auth entries for Commandcode API keys.
+// The relay speaks OpenAI chat completions with a static Bearer key; the base
+// URL defaults to the public endpoint (sanitizer already filled it).
+func (s *ConfigSynthesizer) synthesizeCommandcodeKeys(ctx *SynthesisContext) []*coreauth.Auth {
+	cfg := ctx.Config
+	now := ctx.Now
+	idGen := ctx.IDGenerator
+
+	out := make([]*coreauth.Auth, 0, len(cfg.CommandcodeKey))
+	for i := range cfg.CommandcodeKey {
+		mk := cfg.CommandcodeKey[i]
+		key := strings.TrimSpace(mk.APIKey)
+		base := strings.TrimSpace(mk.BaseURL)
+		if key == "" || base == "" {
+			continue
+		}
+		prefix := strings.TrimSpace(mk.Prefix)
+		proxyURL := strings.TrimSpace(mk.ProxyURL)
+		id, token := idGen.Next("commandcode:apikey", key, base, proxyURL, prefix, config.FormatSortedHeaders(mk.Headers))
+		attrs := map[string]string{
+			"source":       fmt.Sprintf("config:commandcode[%s]", token),
+			"config_index": strconv.Itoa(i),
+			"api_key":      key,
+			"base_url":     base,
+		}
+		metadata := map[string]any{}
+		if mk.DisableCooling != nil {
+			metadata["disable_cooling"] = *mk.DisableCooling
+		}
+		addRequestRetryToMetadata(mk.RequestRetry, metadata)
+		addRequestScopedErrorsToMetadata(mk.RequestScopedErrors, metadata)
+		if mk.Priority != 0 {
+			attrs["priority"] = strconv.Itoa(mk.Priority)
+		}
+		addWeightToAttrs(mk.Weight, attrs)
+		if hash := diff.ComputeClaudeModelsHash(mk.Models); hash != "" {
+			attrs["models_hash"] = hash
+		}
+		addConfigHeadersToAttrs(mk.Headers, attrs)
+		a := &coreauth.Auth{
+			ID:         id,
+			Provider:   "commandcode",
+			Label:      "commandcode-apikey",
+			Prefix:     prefix,
+			Status:     coreauth.StatusActive,
+			ProxyURL:   proxyURL,
+			Attributes: attrs,
+			Metadata:   metadata,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}
+		ApplyAuthExcludedModelsMeta(a, cfg, mk.ExcludedModels, "apikey")
+		if len(a.Metadata) == 0 {
+			a.Metadata = nil
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// synthesizeOpencodeGoKeys creates Auth entries for OpenCode Go API keys.
+func (s *ConfigSynthesizer) synthesizeOpencodeGoKeys(ctx *SynthesisContext) []*coreauth.Auth {
+	cfg := ctx.Config
+	now := ctx.Now
+	idGen := ctx.IDGenerator
+
+	out := make([]*coreauth.Auth, 0, len(cfg.OpencodeGoKey))
+	for i := range cfg.OpencodeGoKey {
+		mk := cfg.OpencodeGoKey[i]
+		key := strings.TrimSpace(mk.APIKey)
+		base := strings.TrimSpace(mk.BaseURL)
+		if key == "" || base == "" {
+			continue
+		}
+		prefix := strings.TrimSpace(mk.Prefix)
+		proxyURL := strings.TrimSpace(mk.ProxyURL)
+		id, token := idGen.Next("opencode-go:apikey", key, base, proxyURL, prefix, config.FormatSortedHeaders(mk.Headers))
+		attrs := map[string]string{
+			"source":       fmt.Sprintf("config:opencode-go[%s]", token),
+			"config_index": strconv.Itoa(i),
+			"api_key":      key,
+			"base_url":     base,
+		}
+		metadata := map[string]any{}
+		if mk.DisableCooling != nil {
+			metadata["disable_cooling"] = *mk.DisableCooling
+		}
+		addRequestRetryToMetadata(mk.RequestRetry, metadata)
+		addRequestScopedErrorsToMetadata(mk.RequestScopedErrors, metadata)
+		if mk.Priority != 0 {
+			attrs["priority"] = strconv.Itoa(mk.Priority)
+		}
+		addWeightToAttrs(mk.Weight, attrs)
+		if hash := diff.ComputeClaudeModelsHash(mk.Models); hash != "" {
+			attrs["models_hash"] = hash
+		}
+		addConfigHeadersToAttrs(mk.Headers, attrs)
+		a := &coreauth.Auth{
+			ID:         id,
+			Provider:   "opencode-go",
+			Label:      "opencode-go-apikey",
 			Prefix:     prefix,
 			Status:     coreauth.StatusActive,
 			ProxyURL:   proxyURL,

@@ -38,6 +38,16 @@ type mirasimKeyWithAuthIndex struct {
 	AuthIndex string `json:"auth-index,omitempty"`
 }
 
+type commandcodeKeyWithAuthIndex struct {
+	config.CommandcodeKey
+	AuthIndex string `json:"auth-index,omitempty"`
+}
+
+type opencodeGoKeyWithAuthIndex struct {
+	config.OpencodeGoKey
+	AuthIndex string `json:"auth-index,omitempty"`
+}
+
 type vertexCompatKeyWithAuthIndex struct {
 	config.VertexCompatKey
 	AuthIndex string `json:"auth-index,omitempty"`
@@ -223,6 +233,72 @@ func (h *Handler) mirasimKeysWithAuthIndex() []mirasimKeyWithAuthIndex {
 		out[i] = mirasimKeyWithAuthIndex{
 			MirasimKey: entry,
 			AuthIndex:  authIndex,
+		}
+	}
+	return out
+}
+
+func (h *Handler) commandcodeKeysWithAuthIndex() []commandcodeKeyWithAuthIndex {
+	if h == nil {
+		return nil
+	}
+	liveIndexByID := h.liveAuthIndexByID()
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.cfg == nil {
+		return nil
+	}
+
+	idGen := synthesizer.NewStableIDGenerator()
+	out := make([]commandcodeKeyWithAuthIndex, len(h.cfg.CommandcodeKey))
+	for i := range h.cfg.CommandcodeKey {
+		entry := h.cfg.CommandcodeKey[i]
+		authIndex := ""
+		key := strings.TrimSpace(entry.APIKey)
+		base := strings.TrimSpace(entry.BaseURL)
+		proxyURL := strings.TrimSpace(entry.ProxyURL)
+		prefix := strings.TrimSpace(entry.Prefix)
+		if key != "" || base != "" {
+			id, _ := idGen.Next("commandcode:apikey", key, base, proxyURL, prefix, config.FormatSortedHeaders(entry.Headers))
+			authIndex = liveIndexByID[id]
+		}
+		out[i] = commandcodeKeyWithAuthIndex{
+			CommandcodeKey: entry,
+			AuthIndex:      authIndex,
+		}
+	}
+	return out
+}
+
+func (h *Handler) opencodeGoKeysWithAuthIndex() []opencodeGoKeyWithAuthIndex {
+	if h == nil {
+		return nil
+	}
+	liveIndexByID := h.liveAuthIndexByID()
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.cfg == nil {
+		return nil
+	}
+
+	idGen := synthesizer.NewStableIDGenerator()
+	out := make([]opencodeGoKeyWithAuthIndex, len(h.cfg.OpencodeGoKey))
+	for i := range h.cfg.OpencodeGoKey {
+		entry := h.cfg.OpencodeGoKey[i]
+		authIndex := ""
+		key := strings.TrimSpace(entry.APIKey)
+		base := strings.TrimSpace(entry.BaseURL)
+		proxyURL := strings.TrimSpace(entry.ProxyURL)
+		prefix := strings.TrimSpace(entry.Prefix)
+		if key != "" || base != "" {
+			id, _ := idGen.Next("opencode-go:apikey", key, base, proxyURL, prefix, config.FormatSortedHeaders(entry.Headers))
+			authIndex = liveIndexByID[id]
+		}
+		out[i] = opencodeGoKeyWithAuthIndex{
+			OpencodeGoKey: entry,
+			AuthIndex:     authIndex,
 		}
 	}
 	return out

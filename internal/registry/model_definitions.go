@@ -38,6 +38,8 @@ type staticModelsJSON struct {
 	Cline       []*ModelInfo `json:"cline"`
 	Cursor      []*ModelInfo `json:"cursor"`
 	Kiro        []*ModelInfo `json:"kiro"`
+	Commandcode []*ModelInfo `json:"commandcode"`
+	OpencodeGo  []*ModelInfo `json:"opencode-go"`
 }
 
 // GetClaudeModels returns the standard Claude model definitions.
@@ -104,6 +106,16 @@ func GetCursorModels() []*ModelInfo {
 // excluding the amazonq-* IDs.
 func GetKiroModels() []*ModelInfo {
 	return filterKiroModels(getModels().Kiro, false)
+}
+
+// GetCommandcodeModels returns the Commandcode relay model definitions.
+func GetCommandcodeModels() []*ModelInfo {
+	return cloneModelInfos(getModels().Commandcode)
+}
+
+// GetOpencodeGoModels returns the OpenCode Go relay model definitions.
+func GetOpencodeGoModels() []*ModelInfo {
+	return cloneModelInfos(getModels().OpencodeGo)
 }
 
 // GetAmazonQModels returns the Amazon Q model definitions. These models use
@@ -523,6 +535,8 @@ func cloneModelInfos(models []*ModelInfo) []*ModelInfo {
 //   - cursor
 //   - kiro
 //   - amazonq
+//   - commandcode
+//   - opencode-go
 func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 	key := strings.ToLower(strings.TrimSpace(channel))
 	switch key {
@@ -556,6 +570,10 @@ func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 		return append(GetKiroModels(), GetAmazonQModels()...)
 	case "amazonq":
 		return GetAmazonQModels()
+	case "commandcode":
+		return GetCommandcodeModels()
+	case "opencode-go":
+		return GetOpencodeGoModels()
 	default:
 		return nil
 	}

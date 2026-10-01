@@ -166,6 +166,14 @@ type Config struct {
 	// configurations. Base-url is required for every entry; there is no default endpoint.
 	MirasimKey []MirasimKey `yaml:"mirasim-api-key" json:"mirasim-api-key"`
 
+	// CommandcodeKey defines a list of Commandcode relay (OpenAI chat-completions
+	// compatible) API key configurations. Base-url defaults to api.commandcode.ai.
+	CommandcodeKey []CommandcodeKey `yaml:"commandcode-api-key" json:"commandcode-api-key"`
+
+	// OpencodeGoKey defines a list of OpenCode Go relay (OpenAI chat-completions
+	// compatible) API key configurations. Base-url defaults to opencode.ai/zen/go.
+	OpencodeGoKey []OpencodeGoKey `yaml:"opencode-go-api-key" json:"opencode-go-api-key"`
+
 	// ClaudeHeaderDefaults configures default header values for Claude API requests.
 	// These are used as fallbacks when the client does not send its own headers.
 	ClaudeHeaderDefaults ClaudeHeaderDefaults `yaml:"claude-header-defaults" json:"claude-header-defaults"`

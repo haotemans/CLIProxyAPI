@@ -146,6 +146,16 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.PATCH("/mirasim-api-key", s.mgmt.PatchMirasimKey)
 		mgmt.DELETE("/mirasim-api-key", s.mgmt.DeleteMirasimKey)
 
+		mgmt.GET("/commandcode-api-key", s.mgmt.GetCommandcodeKeys)
+		mgmt.PUT("/commandcode-api-key", s.mgmt.PutCommandcodeKeys)
+		mgmt.PATCH("/commandcode-api-key", s.mgmt.PatchCommandcodeKey)
+		mgmt.DELETE("/commandcode-api-key", s.mgmt.DeleteCommandcodeKey)
+
+		mgmt.GET("/opencode-go-api-key", s.mgmt.GetOpencodeGoKeys)
+		mgmt.PUT("/opencode-go-api-key", s.mgmt.PutOpencodeGoKeys)
+		mgmt.PATCH("/opencode-go-api-key", s.mgmt.PatchOpencodeGoKey)
+		mgmt.DELETE("/opencode-go-api-key", s.mgmt.DeleteOpencodeGoKey)
+
 		mgmt.GET("/codex-api-key", s.mgmt.GetCodexKeys)
 		mgmt.PUT("/codex-api-key", s.mgmt.PutCodexKeys)
 		mgmt.PATCH("/codex-api-key", s.mgmt.PatchCodexKey)
