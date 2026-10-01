@@ -102,11 +102,6 @@ type Config struct {
 	// Routing controls credential selection behavior.
 	Routing RoutingConfig `yaml:"routing" json:"routing"`
 
-	// Unified embeds the vendored sidecars (cpa-usage-keeper as /keeper/ and
-	// cpa-manager-plus as /manager/) inside this process. Disabled by default.
-	// Changing this section requires a restart; hot reload does not apply.
-	Unified UnifiedConfig `yaml:"unified" json:"unified"`
-
 	// UsageStats is the native per-request usage/cost accounting recorder
 	// (sqlite-backed; GET /v0/management/usage-meters/*). Enabled by default.
 	UsageStats UsageStatsConfig `yaml:"usage-stats" json:"usage-stats"`

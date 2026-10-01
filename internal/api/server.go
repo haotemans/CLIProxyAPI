@@ -26,7 +26,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/managementasset"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/redisqueue"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/sidecars"
 	sdkaccess "github.com/router-for-me/CLIProxyAPI/v8/sdk/access"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -106,8 +105,6 @@ type Server struct {
 
 	exampleAPIKeySafeModeEnabled bool
 	exampleAPIKeySafeModeActive  atomic.Bool
-
-	sidecars *sidecars.Manager
 }
 
 // NewServer creates and initializes a new API server instance.
@@ -241,14 +238,6 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		optionState.routerConfigurator(engine, s.handlers, cfg)
 	}
 
-	// Mount reverse proxies for embedded sidecars (unified mode).
-	if optionState.sidecars != nil {
-		s.sidecars = optionState.sidecars
-		if s.sidecars.Enabled() {
-			s.sidecars.RegisterRoutes(engine)
-		}
-	}
-
 	// Register management routes when configuration or environment secrets are available,
 	// or when a local management password is provided (e.g. TUI mode).
 	hasManagementSecret := cfg.RemoteManagement.SecretKey != "" || envManagementSecret || s.localPassword != ""
@@ -348,12 +337,6 @@ func (s *Server) Start() error {
 	httpErrCh := make(chan error, 1)
 	acceptErrCh := make(chan error, 1)
 
-	// Start embedded sidecars after the public listener is ready; failures
-	// degrade gracefully and are reported via /v0/management/sidecars.
-	if s.sidecars != nil && s.sidecars.Enabled() {
-		s.sidecars.Start(cfg)
-	}
-
 	go func() {
 		httpErrCh <- s.server.Serve(httpListener)
 	}()
@@ -424,12 +407,6 @@ func (s *Server) Start() error {
 //   - error: An error if the server fails to stop
 func (s *Server) Stop(ctx context.Context) error {
 	log.Debug("Stopping API server...")
-
-	// Stop embedded sidecars first: their collector loops talk to CPA's own
-	// management API and would error out uselessly once it is down.
-	if s.sidecars != nil && s.sidecars.Enabled() {
-		s.sidecars.Stop(ctx)
-	}
 
 	if s.keepAliveEnabled {
 		select {

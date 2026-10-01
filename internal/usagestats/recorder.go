@@ -2,7 +2,7 @@
 // completed-request usage records are tapped from the sdk usage manager into
 // a SQLite store (pure-Go modernc driver, CGO-free builds keep working) and
 // exposed through management query endpoints. It is fully additive and does
-// not share code with plugins, sidecars, or quota subsystems.
+// not share code with plugins or quota subsystems.
 package usagestats
 
 import (

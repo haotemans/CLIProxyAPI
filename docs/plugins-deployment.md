@@ -43,6 +43,4 @@ there). Verify with `ldd cli-proxy-api` (should list libc) and then
 
 Any future rebuild for the server should reuse the same server-side build so
 plugin support stays on. The Windows→Linux CGO_ENABLED=0 cross-builds used
-earlier are fine for quick iteration but always leave plugins disabled (and,
-in the unified application, also leave `/keeper/` unembedded — cpa-usage-keeper
-requires the same CGO build; use `unified.*` only with CGO_ENABLED=1).
+earlier are fine for quick iteration but always leave plugins disabled.

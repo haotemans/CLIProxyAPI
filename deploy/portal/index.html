@@ -29,6 +29,8 @@
   .dot.bad { background: #e5534b; }
   .desc { font-size: 13px; color: #9aa1ac; line-height: 1.5; margin-bottom: 14px; }
   .url { font-size: 12px; color: #5f6b7d; font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+  .note { margin-top: 20px; font-size: 12.5px; color: #8b919c; line-height: 1.7;
+    background: #181b22; border: 1px dashed #262b36; border-radius: 12px; padding: 14px 16px; }
   footer { margin-top: 26px; font-size: 12px; color: #5f6b7d; }
   code { background: #1d212a; padding: 1px 6px; border-radius: 6px; }
 </style>
@@ -36,30 +38,25 @@
 <body>
 <main>
   <h1>CLIProxyAPI 服务门户</h1>
-  <p class="sub">三个 CPA 组件的统一入口 · new-api 与代理(xray)为独立服务，不在此列</p>
+  <p class="sub">new-api 与代理(xray)为独立服务，不在此列</p>
   <div class="grid" id="grid"></div>
-  <footer>凭据统一：管理面板密码与 Keeper 登录密码、Manager 管理密钥为同一套（见部署笔记）。</footer>
+  <div class="note">
+    CPA Usage Keeper 与 CPA Manager Plus 两个 sidecar 已从本仓库移除，其核心能力已原生内置：
+    请求级归档见管理面板 <code>观测 → 用量统计 → 请求记录</code>，
+    定价管理与 LiteLLM 同步见 <code>定价</code> 页，
+    凭证池巡检见 <code>认证文件 → 巡检</code>。
+    如仍需这两个工具，可从其上游仓库（cpa-usage-keeper / CPA-Manager-Plus）独立部署。
+  </div>
+  <footer>凭据统一：管理面板密码见部署笔记。</footer>
 </main>
 <script>
 const HOST = location.hostname;
 const services = [
   {
     name: "CPAMC 管理控制台",
-    desc: "CLIProxyAPI 主控：OAuth 登录、凭证池、提供商、插件商店、用量队列（已内嵌 Usage Keeper 入口）",
+    desc: "CLIProxyAPI 主控：OAuth 登录、凭证池、提供商、用量统计（请求记录 / 定价 / 巡检已原生内置）",
     url: "http://" + HOST + ":8317/management.html",
     health: "http://" + HOST + ":8317/management.html"
-  },
-  {
-    name: "CPA Usage Keeper",
-    desc: "用量持久化与分析仪表盘（已内嵌进 cli-proxy-api 进程，统一从 8317 访问）：请求级统计、模型/账号维度聚合、长期趋势",
-    url: "http://" + HOST + ":8317/keeper/",
-    health: "http://" + HOST + ":8317/keeper/healthz"
-  },
-  {
-    name: "CPA Manager Plus",
-    desc: "深度运维中心（同进程内嵌，面板保留原端口）：请求历史、成本估算（LiteLLM 价格同步）、Codex 账号池巡检与清理",
-    url: "http://" + HOST + ":18317/management.html",
-    health: "http://" + HOST + ":18317/health"
   }
 ];
 const grid = document.getElementById("grid");

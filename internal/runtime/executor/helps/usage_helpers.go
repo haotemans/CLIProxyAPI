@@ -1163,7 +1163,7 @@ func parseClaudeUsageNode(usageNode gjson.Result) usage.Detail {
 	if reasoningTokens > 0 && reasoningTokens <= rawOutputTokens {
 		nonReasoningOutput = rawOutputTokens - reasoningTokens
 	} else if reasoningTokens > rawOutputTokens {
-		// Keep Detail.OutputTokens authoritative for keeper subset checks and
+		// Keep Detail.OutputTokens authoritative for usage subset checks and
 		// avoid inventing extra non-reasoning output when the upstream payload
 		// is inconsistent.
 		nonReasoningOutput = 0

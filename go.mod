@@ -3,7 +3,6 @@ module github.com/router-for-me/CLIProxyAPI/v8
 go 1.26.0
 
 require (
-	cpa-usage-keeper v0.0.0-00010101000000-000000000000
 	github.com/andybalholm/brotli v1.0.6
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbles v1.0.0
@@ -27,7 +26,6 @@ require (
 	github.com/pion/webrtc/v4 v4.2.17
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/refraction-networking/utls v1.8.2
-	github.com/seakee/cpa-manager-plus/apps/manager-server v1.0.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/tidwall/gjson v1.18.0
@@ -47,9 +45,6 @@ require (
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.5.1 // indirect
-	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/mattn/go-sqlite3 v1.14.48 // indirect
 	github.com/miekg/dns v1.1.43 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pion/datachannel v1.6.2 // indirect
@@ -68,9 +63,6 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	gorm.io/driver/sqlite v1.5.7 // indirect
-	gorm.io/gorm v1.26.1 // indirect
-	gorm.io/plugin/dbresolver v1.6.0 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
@@ -136,9 +128,4 @@ require (
 	golang.org/x/arch v0.8.0 // indirect
 	google.golang.org/protobuf v1.34.1
 	gopkg.in/ini.v1 v1.67.0 // indirect
-)
-
-replace (
-	cpa-usage-keeper => ./cpa-usage-keeper
-	github.com/seakee/cpa-manager-plus/apps/manager-server => ./cpa-manager-plus/apps/manager-server
 )
