@@ -113,6 +113,13 @@ func classifyProbeError(err error) Status {
 	return StatusUnreachable
 }
 
+// ClassifyError exposes the probe status classification for one-off live
+// checks (e.g. the management test-model endpoint) that report outcomes in
+// the same vocabulary as probe cycles.
+func ClassifyError(err error) Status {
+	return classifyProbeError(err)
+}
+
 func isNotAvailableMessage(err error) bool {
 	msg := strings.ToLower(err.Error())
 	for _, marker := range notAvailableMarkers {
