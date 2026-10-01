@@ -395,6 +395,10 @@ type UsageStatsPrice struct {
 	Input float64 `yaml:"input" json:"input"`
 	// Output is USD per 1M output tokens.
 	Output float64 `yaml:"output" json:"output"`
+	// Source marks how the override was set: empty means user-managed, while
+	// "litellm" marks entries written by the LiteLLM price sync (so a later
+	// sync may refresh them; user-set entries are never clobbered).
+	Source string `yaml:"source,omitempty" json:"source,omitempty"`
 }
 
 // UsageStatsConfig controls the native usage/cost statistics recorder and

@@ -69,6 +69,16 @@ type Pricer struct {
 	custom map[string]Price
 }
 
+// DefaultPrices returns a copy of the embedded default price table (safe to
+// mutate by the caller).
+func DefaultPrices() map[string]Price {
+	out := make(map[string]Price, len(defaultPrices))
+	for pattern, price := range defaultPrices {
+		out[pattern] = price
+	}
+	return out
+}
+
 // NewPricer builds a Pricer from optional user overrides (usage-stats.pricing:
 // pattern -> {input, output}); override keys may be exact IDs or prefixes.
 // Users overrides win on equal-prefix-length matches against defaults.

@@ -1,6 +1,7 @@
 package management
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -151,4 +152,79 @@ func (h *Handler) GetUsageMetersSeries(c *gin.Context) {
 		"to":       toMS,
 		"dropped":  recorder.Dropped(),
 	})
+}
+
+// GetUsageMetersEvents handles GET /usage-meters/events: a paginated,
+// filterable per-request archive (newest first). Query params: from, to,
+// provider, model, auth_file, api_key, status, endpoint, page, page_size.
+// Shape: {enabled, rows, total, page, page_size, from, to, dropped}.
+func (h *Handler) GetUsageMetersEvents(c *gin.Context) {
+	fromMS, toMS, ok := parseUsageWindow(c)
+	if !ok {
+		return
+	}
+	page, errPage := parsePositiveIntParam(c, "page", 1)
+	if errPage != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page"})
+		return
+	}
+	pageSize, errSize := parsePositiveIntParam(c, "page_size", usagestats.DefaultEventPageSize)
+	if errSize != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size"})
+		return
+	}
+	filter := usagestats.EventFilter{
+		FromMS:   fromMS,
+		ToMS:     toMS,
+		Provider: strings.TrimSpace(c.Query("provider")),
+		Model:    strings.TrimSpace(c.Query("model")),
+		AuthFile: strings.TrimSpace(c.Query("auth_file")),
+		APIKey:   strings.TrimSpace(c.Query("api_key")),
+		Status:   strings.TrimSpace(c.Query("status")),
+		Endpoint: strings.TrimSpace(c.Query("endpoint")),
+		Page:     page,
+		PageSize: pageSize,
+	}.Normalize()
+
+	recorder := usagestats.Global()
+	if recorder == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"enabled": false, "rows": []any{}, "total": 0,
+			"page": filter.Page, "page_size": filter.PageSize,
+			"from": fromMS, "to": toMS,
+		})
+		return
+	}
+	rows, total, err := recorder.Events(c.Request.Context(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if rows == nil {
+		rows = []usagestats.EventRow{}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":   true,
+		"rows":      rows,
+		"total":     total,
+		"page":      filter.Page,
+		"page_size": filter.PageSize,
+		"from":      fromMS,
+		"to":        toMS,
+		"dropped":   recorder.Dropped(),
+	})
+}
+
+// parsePositiveIntParam reads an optional positive-int query parameter,
+// falling back to the default when absent.
+func parsePositiveIntParam(c *gin.Context, name string, fallback int) (int, error) {
+	raw := strings.TrimSpace(c.Query(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid %s", name)
+	}
+	return value, nil
 }

@@ -843,9 +843,13 @@ requests:
 
 # Native usage/cost statistics: completed-request records are persisted into a
 # local sqlite database (pure-Go driver, works in CGO_ENABLED=0 builds) and can
-# be queried via GET /v0/management/usage-meters/summary and /usage-meters/series,
-# or browsed in the management panel (观测 > 用量统计). Independent of the
+# be queried via GET /v0/management/usage-meters/summary, /usage-meters/series
+# and /usage-meters/events (paginated per-request archive), or browsed in the
+# management panel (观测 > 用量统计). Independent of the
 # vendor/plugin quota features. Restart required when changing enabled/path.
+# Pricing is manageable at runtime: GET/PUT/DELETE /usage-meters/pricing and
+# POST /usage-meters/pricing/sync-litellm (entries sourced "litellm" refresh
+# on later syncs; user-set entries are never clobbered).
 # usage-stats:
 #   enabled: true                 # default true; set false to disable the recorder
 #   path: ""                      # default <auth-dir>/usage-stats.db
