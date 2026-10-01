@@ -192,6 +192,11 @@ func (h *Handler) inlineModelProbe(ctx context.Context, auth *cliproxyauth.Auth,
 	if !engine.HasDriver(provider) {
 		return nil, fmt.Errorf("no model-probe driver for provider %s", provider)
 	}
+	if prune {
+		// Manual prune-and-verify covers the whole catalog; only scheduled
+		// cycles are capped per credential to bound upstream traffic.
+		engine = engine.UnlimitedClone()
+	}
 	models, _ := registry.GetGlobalRegistry().GetModelsAndEpochForClient(auth.ID)
 	ids := make([]string, 0, len(models))
 	for _, model := range models {
@@ -239,7 +244,7 @@ func (h *Handler) inlineModelProbe(ctx context.Context, auth *cliproxyauth.Auth,
 func aggressivePruneRun(section *modelprobe.Section) *modelprobe.PruneRun {
 	removed := make([]string, 0, len(section.PerModel))
 	for id, outcome := range section.PerModel {
-		if outcome == nil || outcome.Status == modelprobe.StatusUsable {
+		if outcome == nil || outcome.Status != modelprobe.StatusNotAvailable {
 			continue
 		}
 		removed = append(removed, id)

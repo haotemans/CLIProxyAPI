@@ -121,8 +121,8 @@ func TestModelProbeRunPruneUnusedRemovesNonUsable(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("status = %d: %+v", code, payload)
 	}
-	if got := pruneRunRemoved(t, payload); fmt.Sprint(got) != "[busy-1 down-1 gpt-4o nope-1]" {
-		t.Fatalf("removed = %v", got)
+	if got := pruneRunRemoved(t, payload); fmt.Sprint(got) != "[gpt-4o]" {
+		t.Fatalf("removed = %v, want only the not_available id (busy/limited/unreachable/auth_error stay)", got)
 	}
 	// Conservative summary stays: only the not_available id counts as pruned.
 	if summary, ok := payload["summary"].(map[string]any); !ok || summary["pruned"] != 1.0 || summary["usable"] != 2.0 {
@@ -148,14 +148,14 @@ func TestModelProbeRunPruneUnusedRemovesNonUsable(t *testing.T) {
 		t.Fatalf("persisted auth invalid JSON: %v", errJSON)
 	}
 	persistedSection := modelprobe.ReadSection(persisted)
-	if persistedSection == nil || persistedSection.PruneRun == nil || len(persistedSection.PruneRun.Removed) != 4 {
+	if persistedSection == nil || persistedSection.PruneRun == nil || len(persistedSection.PruneRun.Removed) != 1 {
 		t.Fatalf("persisted section = %+v", persistedSection)
 	}
 
 	// Registry-facing effect: only the usable ids survive the catalog filter
 	// (the same filter registerModelsForAuth applies on the Update path).
-	if got := registeredIDsFiltered(t, latest); fmt.Sprint(got) != "[good-1 good-2]" {
-		t.Fatalf("filtered catalog = %v", got)
+	if got := registeredIDsFiltered(t, latest); fmt.Sprint(got) != "[busy-1 down-1 good-1 good-2 nope-1]" {
+		t.Fatalf("filtered catalog = %v (only not_available pruned)", got)
 	}
 	// The credential is never auto-disabled by an aggressive run.
 	if latest.Disabled {
@@ -179,7 +179,7 @@ func TestModelProbeRunPruneUnusedRemovesNonUsable(t *testing.T) {
 	}
 	mergedAuth, _ := manager.GetByID(auth.ID)
 	merged := modelprobe.ReadSection(mergedAuth.Metadata)
-	if merged == nil || merged.PruneRun == nil || len(merged.PruneRun.Removed) != 4 {
+	if merged == nil || merged.PruneRun == nil || len(merged.PruneRun.Removed) != 1 {
 		t.Fatalf("scheduled merge erased the audit marker: %+v", merged)
 	}
 }
@@ -200,8 +200,8 @@ func TestModelProbeRunPruneUnusedEverythingUnusable(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("status = %d: %+v", code, payload)
 	}
-	if got := pruneRunRemoved(t, payload); fmt.Sprint(got) != "[m-1 m-2 m-3]" {
-		t.Fatalf("removed = %v, want the whole catalog", got)
+	if got := pruneRunRemoved(t, payload); fmt.Sprint(got) != "[m-1]" {
+		t.Fatalf("removed = %v, want only not_available pruned; limited/unreachable/auth_error stay", got)
 	}
 	if summary, ok := payload["summary"].(map[string]any); !ok || summary["usable"] != 0.0 {
 		t.Fatalf("summary = %+v", payload["summary"])
@@ -210,8 +210,8 @@ func TestModelProbeRunPruneUnusedEverythingUnusable(t *testing.T) {
 	if !ok || latest == nil {
 		t.Fatal("registered auth missing after run")
 	}
-	if got := registeredIDsFiltered(t, latest); len(got) != 0 {
-		t.Fatalf("catalog must be empty after a full prune: %v", got)
+	if got := registeredIDsFiltered(t, latest); fmt.Sprint(got) != "[m-2 m-3]" {
+		t.Fatalf("not_available-only prune leaves limited/unreachable/auth_error models: %v", got)
 	}
 	if latest.Disabled {
 		t.Fatal("fully pruned credential must NOT be auto-disabled (self-heal via scheduled cycles)")

@@ -214,6 +214,18 @@ func (e *Engine) CredentialCycle(ctx context.Context, auth *cliproxyauth.Auth, p
 	return section
 }
 
+// UnlimitedClone returns an engine copy with the per-cycle model cap removed.
+// Manual prune-and-verify runs must probe the entire catalog, unlike the
+// capped scheduled cycles.
+func (e *Engine) UnlimitedClone() *Engine {
+	if e == nil {
+		return nil
+	}
+	clone := *e
+	clone.opts.MaxModelsPerCredentialPerCycle = 0
+	return &clone
+}
+
 // probeAll runs the probes on the worker pool deterministically.
 func probeAll(ctx context.Context, e *Engine, auth *cliproxyauth.Auth, provider string, models []string, workers int) map[string]ModelOutcome {
 	outcomes := make(map[string]ModelOutcome, len(models))
