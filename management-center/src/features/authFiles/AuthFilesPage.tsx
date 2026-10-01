@@ -34,6 +34,11 @@ import { VaultHeader } from '@/features/authFiles/components/VaultHeader';
 import { VaultPulse } from '@/features/authFiles/components/VaultPulse';
 import { invalidateAuthFileDerivedCaches } from '@/features/authFiles/cacheInvalidation';
 import {
+  indexInspectionByFile,
+  inspectionApi,
+  type InspectionCredential,
+} from '@/features/authFiles/inspection';
+import {
   buildWildcardSearch,
   matchesAuthFileSearch,
   sortAuthFiles,
@@ -98,6 +103,8 @@ export function AuthFilesPage() {
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
   const [sortMode, setSortMode] = useState<AuthFilesSortMode>('default');
   const [uiStateHydrated, setUiStateHydrated] = useState(false);
+  const [inspectionByFile, setInspectionByFile] = useState<Record<string, InspectionCredential>>({});
+  const [inspectionRunning, setInspectionRunning] = useState(false);
 
   const {
     modelsModalOpen,
@@ -546,6 +553,29 @@ export function AuthFilesPage() {
     setPage(1);
   }, []);
 
+  /* ---------- 巡检 (pool inspection, read-only) ---------- */
+
+  const runInspection = useCallback(async () => {
+    setInspectionRunning(true);
+    try {
+      const provider = filter !== 'all' ? String(filter) : undefined;
+      const resp = await inspectionApi.run(provider);
+      setInspectionByFile(indexInspectionByFile(resp.credentials));
+      showNotification(
+        t('auth_files.inspection_done', {
+          good: resp.summary?.good ?? 0,
+          warn: resp.summary?.warn ?? 0,
+          bad: resp.summary?.bad ?? 0,
+        }),
+        'success'
+      );
+    } catch (err) {
+      showNotification(err instanceof Error ? err.message : String(err), 'error');
+    } finally {
+      setInspectionRunning(false);
+    }
+  }, [filter, showNotification, t]);
+
   const deleteAllButtonLabel = (() => {
     if (enabledOnly || disabledOnly) {
       return t('auth_files.delete_filtered_result_button');
@@ -631,6 +661,10 @@ export function AuthFilesPage() {
           deleteLabel={deleteAllButtonLabel}
           deleteDisabled={disableControls || loading || deletingAll || files.length === 0}
           deleteLoading={deletingAll}
+          inspectionLabel={t('auth_files.inspection_button')}
+          inspectionLoading={inspectionRunning}
+          inspectionDisabled={disableControls || loading}
+          onInspect={() => void runInspection()}
           onDelete={() =>
             handleDeleteAll({
               filter,
@@ -704,6 +738,7 @@ export function AuthFilesPage() {
                 entranceDelayMs={cardEntranceDelay(index)}
                 modelProbeRow={modelProbeRows[file.name]}
                 modelProbeNextRunAt={modelProbeNextRunAt}
+                inspectionEntry={inspectionByFile[file.name] ?? null}
                 onModelProbed={updateModelProbeRow}
                 onShowModels={showModels}
                 onDownload={handleDownload}

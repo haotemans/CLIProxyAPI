@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconSearch, IconSlidersHorizontal, IconTrash2 } from '@/components/ui/icons';
+import { IconSearch, IconShield, IconSlidersHorizontal, IconTrash2 } from '@/components/ui/icons';
 import {
   MAX_CARD_PAGE_SIZE,
   MIN_CARD_PAGE_SIZE,
@@ -33,6 +33,11 @@ export type AuthFilesToolbarProps = {
   deleteDisabled: boolean;
   deleteLoading: boolean;
   onDelete: () => void;
+  /** 巡检 (read-only pool inspection) action; optional to keep callers light. */
+  inspectionLabel?: string;
+  inspectionLoading?: boolean;
+  inspectionDisabled?: boolean;
+  onInspect?: () => void;
 };
 
 /**
@@ -58,6 +63,10 @@ export function AuthFilesToolbar(props: AuthFilesToolbarProps) {
     deleteDisabled,
     deleteLoading,
     onDelete,
+    inspectionLabel,
+    inspectionLoading = false,
+    inspectionDisabled = false,
+    onInspect,
   } = props;
   const { t } = useTranslation();
   const [displaySettingsOpen, setDisplaySettingsOpen] = useState(false);
@@ -176,6 +185,18 @@ export function AuthFilesToolbar(props: AuthFilesToolbarProps) {
           </div>
         )}
       </div>
+
+      {onInspect && inspectionLabel && (
+        <button
+          type="button"
+          className={styles.inspectAction}
+          onClick={onInspect}
+          disabled={inspectionDisabled || inspectionLoading}
+        >
+          {inspectionLoading ? <LoadingSpinner size={13} /> : <IconShield size={14} />}
+          {inspectionLabel}
+        </button>
+      )}
 
       <button
         type="button"

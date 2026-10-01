@@ -18,11 +18,17 @@ import {
   type UsageSeriesRow,
   type UsageWindow,
 } from './logic';
+import { EventsTab } from './EventsTab';
+import { PricingTab } from './PricingTab';
 import styles from './UsageStatsPage.module.scss';
 
 type GroupTab = 'provider' | 'model' | 'auth_file';
 
 const GROUP_TABS: GroupTab[] = ['provider', 'model', 'auth_file'];
+
+type PageTab = 'overview' | 'events' | 'pricing';
+
+const PAGE_TABS: PageTab[] = ['overview', 'events', 'pricing'];
 
 const PRESETS: UsageRangePreset[] = ['24h', '7d', '30d', 'custom'];
 
@@ -33,6 +39,7 @@ const fromLocalInput = (value: string): number | null => {
 
 export function UsageStatsPage() {
   const { t } = useTranslation();
+  const [pageTab, setPageTab] = useState<PageTab>('overview');
   const [preset, setPreset] = useState<UsageRangePreset>('7d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -76,9 +83,11 @@ export function UsageStatsPage() {
   }, [window.from, window.to, groupBy]);
 
   // Auto-refresh is intentionally off by default; the refresh button reloads.
+  // The overview dataset only loads while the overview tab is visible.
   useEffect(() => {
+    if (pageTab !== 'overview') return;
     void load();
-  }, [load]);
+  }, [load, pageTab]);
 
   const chart = useMemo(
     () => shapeSeriesByDay(seriesRows, window.from, window.to),
@@ -128,12 +137,32 @@ export function UsageStatsPage() {
               />
             </div>
           )}
-          <Button variant="secondary" size="sm" onClick={() => void load()} loading={loading}>
-            <IconRefreshCw size={14} />
-            {t('usage_stats.refresh')}
-          </Button>
+          {pageTab === 'overview' && (
+            <Button variant="secondary" size="sm" onClick={() => void load()} loading={loading}>
+              <IconRefreshCw size={14} />
+              {t('usage_stats.refresh')}
+            </Button>
+          )}
         </div>
       </section>
+
+      <nav className={styles.tabBar} aria-label={t('usage_stats.tabs_label')}>
+        {PAGE_TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            className={`${styles.tabButton} ${pageTab === tab ? styles.tabButtonActive : ''}`}
+            aria-pressed={pageTab === tab}
+            onClick={() => setPageTab(tab)}
+          >
+            {t(`usage_stats.tab_${tab}`)}
+          </button>
+        ))}
+      </nav>
+
+      {pageTab === 'events' && <EventsTab window={window} />}
+      {pageTab === 'pricing' && <PricingTab />}
+      {pageTab === 'overview' && <>
 
       {summary && !summary.enabled && (
         <div className={styles.hint}>{t('usage_stats.disabled_hint')}</div>
@@ -278,6 +307,7 @@ export function UsageStatsPage() {
           </div>
         )}
       </Card>
+      </>}
     </div>
   );
 }

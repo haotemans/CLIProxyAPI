@@ -51,6 +51,8 @@ export type AuthFileCardProps = {
   entranceDelayMs?: number | null;
   modelProbeRow?: import('@/features/authFiles/modelProbe/logic').ProbeRowByFile[string];
   modelProbeNextRunAt?: string;
+  /** 巡检结果（read-only pool inspection）；null/undefined 表示未运行或无该文件条目。 */
+  inspectionEntry?: import('@/features/authFiles/inspection').InspectionCredential | null;
   onModelProbed?: (file: string, summary: {
     probed?: boolean;
     checked_at?: string;
@@ -83,6 +85,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
     entranceDelayMs,
     modelProbeRow,
     modelProbeNextRunAt,
+    inspectionEntry,
     onModelProbed,
     onShowModels,
     onDownload,
@@ -191,6 +194,25 @@ export function AuthFileCard(props: AuthFileCardProps) {
       )}
 
       <AuthFileCooldownSection snapshot={file.cooldownSnapshot} />
+
+      {inspectionEntry && (
+        <div className={styles.inspection} title={inspectionEntry.signals.status_message || undefined}>
+          <span className={`${styles.inspectionChip} ${styles[`inspection_${inspectionEntry.health}`] ?? ''}`}>
+            {t(`auth_files.inspection_health_${inspectionEntry.health}`)}
+          </span>
+          {inspectionEntry.suggestions.length > 0 ? (
+            <span className={styles.inspectionSuggestions}>
+              {inspectionEntry.suggestions.map((code) => (
+                <span key={code} className={styles.inspectionSuggestion}>
+                  {t(`auth_files.inspection_suggest_${code}`, { defaultValue: code })}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className={styles.inspectionOk}>{t('auth_files.inspection_no_issues')}</span>
+          )}
+        </div>
+      )}
 
       <div className={styles.health}>
         <div className={styles.healthHead}>

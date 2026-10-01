@@ -500,3 +500,54 @@
     transform: none;
   }
 }
+
+.inspection {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.inspectionChip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.inspection_good {
+  background: color-mix(in srgb, #4caf7d 16%, transparent);
+  color: var(--success, #4caf7d);
+}
+
+.inspection_warn {
+  background: color-mix(in srgb, #d99a5b 18%, transparent);
+  color: var(--warning, #d99a5b);
+}
+
+.inspection_bad {
+  background: color-mix(in srgb, #d05f76 16%, transparent);
+  color: var(--danger, #d05f76);
+}
+
+.inspectionSuggestions {
+  display: inline-flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.inspectionSuggestion {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px dashed var(--border-subtle, #8881);
+  font-size: 11px;
+  color: var(--text-secondary, #8a8a93);
+}
+
+.inspectionOk {
+  font-size: 11px;
+  color: var(--text-secondary, #8a8a93);
+}
