@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/Button';
 import type { AuthFileItem } from '@/types';
 import { useNow } from '@/hooks/useNow';
+import styles from '../components/AuthFileCard.module.scss';
 import { modelProbeApi } from './api';
 import {
   formatCheckedAt,
   formatRelativeFromNow,
   PROBE_SUPPORTED_PROVIDERS,
-  type ProbeRowByFile,
+  splitProbeSummary,
+  type ProbeSummaryPart,
 } from './logic';
 
 export interface AuthFileProbeSectionProps {
   file: AuthFileItem;
-  row: ProbeRowByFile[string] | undefined;
+  row: import('./logic').ProbeRowByFile[string] | undefined;
   /** Jitter-aware next scheduled cycle instant (RFC3339) from the status endpoint. */
   nextRunAt?: string;
   onProbed: (file: string, summary: {
@@ -25,10 +26,22 @@ export interface AuthFileProbeSectionProps {
   }) => void;
 }
 
+const partClass = (part: ProbeSummaryPart, usable: number, pruned: number): string => {
+  switch (part.kind) {
+    case 'usable':
+      return usable > 0 ? styles.probeCountUsable : styles.probeCountNeutral;
+    case 'pruned':
+      return pruned > 0 ? styles.probeCountPruned : styles.probeCountNeutral;
+    default:
+      return styles.probeCountNeutral;
+  }
+};
+
 /**
- * Per-card model-probe footer: shows whether the backend verified each
- * advertised model for this credential (✓ usable / ✗ pruned + last check
- * time), the next scheduled run, and offers an inline re-probe POST.
+ * Per-card model-probe line: one small muted meta row (same visual weight as
+ * the other card meta lines) summarizing usable/pruned counts and last check
+ * time, with a subtle inline re-probe action. Status color shows only on
+ * non-zero counts, keeping the block quiet until it matters.
  */
 export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFileProbeSectionProps) {
   const { t } = useTranslation();
@@ -43,6 +56,9 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
 
   const probed = Boolean(row?.probed);
   const skipReason = row?.skip_reason?.trim();
+  const usable = row?.usable ?? 0;
+  const pruned = row?.pruned ?? 0;
+
   const handleProbe = async () => {
     setProbing(true);
     setError('');
@@ -64,39 +80,60 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
     }
   };
 
+  const renderProbeSentence = (values: { usable: string; pruned: string; date: string }) =>
+    t('auth_files.probe_summary', {
+      usable: values.usable,
+      pruned: values.pruned,
+      checked_at: values.date,
+    });
+
+  const parts = probed
+    ? splitProbeSummary(renderProbeSentence, usable, pruned, formatCheckedAt(row?.checked_at))
+    : [];
   const nextRunLabel = !probed && nextRunAt ? formatRelativeFromNow(nextRunAt, now) : '';
 
   return (
-    <div className="auth-file-probe">
-      <div className="auth-file-probe-line">
-        <span className="auth-file-probe-icon" aria-hidden>
-          {probed ? '✓' : '○'}
+    <div className={styles.probeMeta}>
+      <span className={styles.probeDot} aria-hidden="true">
+        {probed ? '✓' : '○'}
+      </span>
+      {probed ? (
+        <span className={styles.probeTitle}>
+          {parts.map((part, index) =>
+            part.kind === 'text' ? (
+              <span key={index}>{part.text}</span>
+            ) : (
+              <span key={index} className={partClass(part, usable, pruned)}>
+                {part.text}
+              </span>
+            )
+          )}
         </span>
-        <span>
-          {probed
-            ? t('auth_files.probe_summary', {
-                usable: row?.usable ?? 0,
-                pruned: row?.pruned ?? 0,
-                checked_at: formatCheckedAt(row?.checked_at),
-              })
-            : nextRunLabel
-              ? t('auth_files.probe_never_next', { in: nextRunLabel })
-              : t('auth_files.probe_never')}
+      ) : (
+        <span className={styles.probeTitleMuted}>
+          {nextRunLabel
+            ? t('auth_files.probe_never_next', { in: nextRunLabel })
+            : t('auth_files.probe_never')}
         </span>
-        <Button variant="secondary" size="sm" onClick={() => void handleProbe()} loading={probing}>
-          {t('auth_files.probe_run')}
-        </Button>
-      </div>
-      {error && <div className="auth-file-probe-error">{t('auth_files.probe_failed', { message: error })}</div>}
-      {skipReason && (
-        <div className="auth-file-probe-line auth-file-probe-skipped">
-          {t('auth_files.probe_skipped', { reason: skipReason })}
-        </div>
       )}
-      {probed && (row?.pruned ?? 0) > 0 && row?.pruned_models?.length ? (
-        <div className="auth-file-probe-line auth-file-probe-pruned">
+      <button
+        type="button"
+        className={styles.probeRun}
+        disabled={probing}
+        onClick={() => void handleProbe()}
+      >
+        {probing ? '…' : t('auth_files.probe_run')}
+      </button>
+      {error && (
+        <span className={styles.probeError}>{t('auth_files.probe_failed', { message: error })}</span>
+      )}
+      {skipReason && (
+        <span className={styles.probeNoteMuted}>{t('auth_files.probe_skipped', { reason: skipReason })}</span>
+      )}
+      {probed && pruned > 0 && row?.pruned_models?.length ? (
+        <span className={styles.probeNoteMuted}>
           {t('auth_files.probe_pruned_detail', { models: row.pruned_models.join(', ') })}
-        </div>
+        </span>
       ) : null}
     </div>
   );

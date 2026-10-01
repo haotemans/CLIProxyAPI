@@ -1,4 +1,5 @@
 import { describe, expect, spyOn, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { modelProbeApi } from '@/features/authFiles/modelProbe/api';
 import {
   formatCheckedAt,
@@ -6,6 +7,7 @@ import {
   mergeProbeSummary,
   PROBE_SUPPORTED_PROVIDERS,
   rowsToMap,
+  splitProbeSummary,
 } from '@/features/authFiles/modelProbe/logic';
 import { apiClient } from '@/services/api/client';
 
@@ -103,5 +105,48 @@ describe('formatRelativeFromNow', () => {
   test('status response carries next_run_at', () => {
     const response = { enabled: true, next_run_at: '2026-10-02T00:00:00Z', credentials: [] };
     expect(response.next_run_at).toBeTruthy();
+  });
+});
+
+describe('splitProbeSummary', () => {
+  // Drives the real locale templates from disk (unchanged locale files, all
+  // four of them share the usable/pruned/date placeholder triple).
+  const localeRender = (locale: string) => {
+    const translations = JSON.parse(readFileSync(`src/i18n/locales/${locale}.json`, 'utf8'));
+    const template = translations.auth_files.probe_summary as string;
+    return (values: { usable: string; pruned: string; date: string }) =>
+      template
+        .replaceAll('{{usable}}', values.usable)
+        .replaceAll('{{pruned}}', values.pruned)
+        .replaceAll('{{checked_at}}', values.date);
+  };
+
+  test('keeps every localized word and splits the three values in all 4 locales', () => {
+    for (const locale of ['en', 'zh-CN', 'zh-TW', 'ru']) {
+      const parts = splitProbeSummary(localeRender(locale), 3, 1, '2026-10-01 12:34');
+      const byKind = Object.fromEntries(parts.map((part) => [part.kind, part.text]));
+      expect(byKind.usable).toBe('3');
+      expect(byKind.pruned).toBe('1');
+      expect(byKind.date).toBe('2026-10-01 12:34');
+      // No placeholder sentinel leaks into the rendered text.
+      for (const part of parts) {
+        expect(part.text).not.toContain('@@U@@');
+        expect(part.text).not.toContain('@@P@@');
+        expect(part.text).not.toContain('@@D@@');
+      }
+      // The joined parts rebuild the localized sentence exactly.
+      expect(parts.map((part) => part.text).join('')).toBe(
+        localeRender(locale)({ usable: '3', pruned: '1', date: '2026-10-01 12:34' })
+      );
+    }
+  });
+
+  test('splits zero counts without dropping the muted fragments', () => {
+    const parts = splitProbeSummary(localeRender('en'), 0, 0, 'never');
+    const usable = parts.find((part) => part.kind === 'usable');
+    const pruned = parts.find((part) => part.kind === 'pruned');
+    expect(usable?.text).toBe('0');
+    expect(pruned?.text).toBe('0');
+    expect(parts.some((part) => part.kind === 'text' && part.text.includes('usable'))).toBe(true);
   });
 });
