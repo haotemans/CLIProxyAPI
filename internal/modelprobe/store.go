@@ -54,6 +54,9 @@ func MergeSections(previous, fresh *Section) *Section {
 		SkipReason: fresh.SkipReason,
 		SkipCycle:  fresh.SkipCycle,
 		Skips:      fresh.Skips,
+		// The fresh cycle's catalog size wins; a skipped/zero cycle keeps the
+		// last known one so the panel doesn't blank the counter on backoff.
+		CatalogSize: maxInt(fresh.CatalogSize, previous.CatalogSize),
 	}
 	stillUnavailable := make(map[string]struct{}, len(previous.Pruned))
 	for id, outcome := range previous.PerModel {
@@ -117,8 +120,14 @@ func SummaryForAuth(auth *cliproxyauth.Auth) map[string]any {
 		"usable":     len(section.Usable),
 		"pruned":     len(section.Pruned),
 	}
+	if section.CatalogSize > 0 {
+		out["catalog_size"] = section.CatalogSize
+	}
 	if len(section.Pruned) > 0 {
 		out["pruned_models"] = section.Pruned
+	}
+	if section.IsProviderBlocked() {
+		out["status"] = string(StatusProviderBlocked)
 	}
 	return out
 }

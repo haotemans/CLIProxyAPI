@@ -239,9 +239,16 @@ func (s *Scheduler) probeAuth(ctx context.Context, auth *cliproxyauth.Auth, cycl
 		return false
 	}
 	previous := ReadSection(auth.Metadata)
-	if cycle%authErrorBackoffEvery != 0 && sectionHasAuthError(previous) {
-		s.recordCredentialSkip(auth, previous, "auth_error backoff (every 4th cycle)", cycle)
-		return false
+	if cycle%authErrorBackoffEvery != 0 {
+		if previous != nil && previous.IsProviderBlocked() {
+			// Same cadence as auth_error: don't hammer a provider mid-block-phase.
+			s.recordCredentialSkip(auth, previous, "provider_blocked backoff (every 4th cycle)", cycle)
+			return false
+		}
+		if sectionHasAuthError(previous) {
+			s.recordCredentialSkip(auth, previous, "auth_error backoff (every 4th cycle)", cycle)
+			return false
+		}
 	}
 	models := s.candidates(auth)
 	if len(models) == 0 {

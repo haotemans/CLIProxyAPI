@@ -367,11 +367,18 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 	if key == "" {
 		key = strings.ToLower(strings.TrimSpace(a.Provider))
 	}
-	// Per-credential probe pruning: models the last modelprobe cycle classified
-	// not_available drop out of this credential's advertised set. Without any
+	// Per-credential probe pruning and block-phase hiding. Models the last
+	// cycle classified not_available drop out; when EVERY outcome is
+	// provider_blocked (e.g. Cline's periodic third-party clampdown), the
+	// credential currently serves nothing and the whole set hides (routing
+	// skips it) while the probe section stays for recovery. Without any
 	// `model_probe` section the catalog passes through unchanged.
-	if probeSection := modelprobe.ReadSection(a.Metadata); probeSection != nil && len(probeSection.Pruned) > 0 {
-		models = modelprobe.FilterPrunedForAuth(a.Metadata, models)
+	if probeSection := modelprobe.ReadSection(a.Metadata); probeSection != nil {
+		if probeSection.IsProviderBlocked() {
+			models = nil
+		} else if len(probeSection.Pruned) > 0 {
+			models = modelprobe.FilterPrunedForAuth(a.Metadata, models)
+		}
 	}
 	models = s.appendPluginModels(key, models)
 	if len(models) > 0 {

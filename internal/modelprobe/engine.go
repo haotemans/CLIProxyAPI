@@ -191,13 +191,18 @@ func (e *Engine) CredentialCycle(ctx context.Context, auth *cliproxyauth.Auth, p
 	if len(models) == 0 {
 		return ReadSection(auth.Metadata)
 	}
+	catalogSize := len(models)
 	if cap := e.opts.MaxModelsPerCredentialPerCycle; cap > 0 && len(models) > cap {
 		models = models[:cap]
 	}
 	outcomes := probeAll(ctx, e, auth, provider, models, maxInt(e.opts.MaxParallel, 1))
 	section := synthesizeSection(e.Now(), outcomes)
+	section.CatalogSize = catalogSize
 	if len(section.Pruned) > 0 {
 		log.Infof("%s: %s credential %s pruned %d models: %v", logPrefix(e.opts), provider, auth.ID, len(section.Pruned), firstN(section.Pruned, 6))
+	}
+	if section.IsProviderBlocked() {
+		log.Infof("%s: %s credential %s is provider-blocked across %d models (third-party restriction phase)", logPrefix(e.opts), provider, auth.ID, len(outcomes))
 	}
 	return section
 }

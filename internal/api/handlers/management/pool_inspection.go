@@ -19,9 +19,10 @@ import (
 
 // inspectionSuggestion codes; the panel localizes them.
 const (
-	suggestDelete  = "delete"  // disabled long ago → suggest removal
-	suggestRelogin = "relogin" // auth_error dominant → suggest re-login
-	suggestRotate  = "rotate"  // quota exhausted → suggest pause & rotation
+	suggestDelete       = "delete"        // disabled long ago → suggest removal
+	suggestRelogin      = "relogin"       // auth_error dominant → suggest re-login
+	suggestRotate       = "rotate"        // quota exhausted → suggest pause & rotation
+	suggestWaitProvider = "wait-provider" // provider block phase → wait it out
 )
 
 const (
@@ -49,14 +50,15 @@ type inspectionSignals struct {
 	ProbeCheckedAt  string `json:"probe_checked_at,omitempty"`
 	ProbeAuthError  bool   `json:"probe_auth_error"`
 	ProbeSkipReason string `json:"probe_skip_reason,omitempty"`
+	ProbeBlocked    bool   `json:"probe_blocked,omitempty"`
 }
 
 type inspectionCredential struct {
-	AuthFile    string             `json:"auth_file"`
-	Provider    string             `json:"provider"`
-	Health      string             `json:"health"` // good | warn | bad
-	Signals     inspectionSignals  `json:"signals"`
-	Suggestions []string           `json:"suggestions"`
+	AuthFile    string            `json:"auth_file"`
+	Provider    string            `json:"provider"`
+	Health      string            `json:"health"` // good | warn | bad
+	Signals     inspectionSignals `json:"signals"`
+	Suggestions []string          `json:"suggestions"`
 }
 
 // isAuthErrorKind reports whether an error_kind marks a credential problem
@@ -78,6 +80,8 @@ func dominantErrorKind(bucket map[string]int64) (string, int64) {
 
 // probeAuthErrorFlagged reports whether the persisted model_probe section
 // flags the credential itself (per-model auth_error or an auth_error skip).
+// Provider-blocked sections are NOT auth errors: the credential is healthy,
+// the provider just closed third-party access for a while.
 func probeAuthErrorFlagged(section *modelprobe.Section) bool {
 	if section == nil {
 		return false
@@ -91,6 +95,13 @@ func probeAuthErrorFlagged(section *modelprobe.Section) bool {
 		}
 	}
 	return false
+}
+
+// probeProviderBlocked reports whether the section marks a full block phase
+// (all outcomes provider_blocked). The mark stays visible for operators but
+// is not a credential problem, so it never suggests re-login.
+func probeProviderBlocked(section *modelprobe.Section) bool {
+	return section != nil && section.IsProviderBlocked()
 }
 
 // inspectCredential grades one credential. now, the 24h stats and the
@@ -125,6 +136,7 @@ func inspectCredential(auth *coreauth.Auth, now time.Time, stats usagestats.Auth
 	if section != nil {
 		signals.ProbeCheckedAt = section.CheckedAt
 		signals.ProbeAuthError = probeAuthErrorFlagged(section)
+		signals.ProbeBlocked = probeProviderBlocked(section)
 		if section.Skipped {
 			signals.ProbeSkipReason = section.SkipReason
 		}
@@ -152,6 +164,11 @@ func inspectCredential(auth *coreauth.Auth, now time.Time, stats usagestats.Auth
 		addSuggestion(suggestRelogin)
 		bad = true
 	}
+	// provider_blocked is a phase the credential rides out — warn and wait,
+	// never a re-login suggestion for what is not a credential problem.
+	if signals.ProbeBlocked {
+		addSuggestion(suggestWaitProvider)
+	}
 	switch {
 	case signals.QuotaExceeded:
 		addSuggestion(suggestRotate)
@@ -176,7 +193,7 @@ func inspectCredential(auth *coreauth.Auth, now time.Time, stats usagestats.Auth
 	case bad:
 		health = "bad"
 	case signals.Disabled, signals.QuotaExceeded, signals.Unauthorized,
-		signals.ProbeAuthError, authErrorsDominant, quotaDominant,
+		signals.ProbeAuthError, signals.ProbeBlocked, authErrorsDominant, quotaDominant,
 		(significant && stats.Errors*5 >= stats.Requests):
 		health = "warn"
 	}

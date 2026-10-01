@@ -41,12 +41,38 @@ var authMarkers = []string{
 	"sign in again",
 }
 
+// providerBlockedMarkers are provider-specific texts unambiguously naming the
+// "third-party access temporarily closed" brick wall, NOT a credential
+// failure and NOT "model unavailable". Cline's periodic third-party
+// clampdown answers every chat completion with 401 and this body text.
+var providerBlockedMarkers = []string{
+	"latest version of cline",
+}
+
+// isProviderBlockedMessage reports whether the error carries the provider's
+// third-party block-phase marker.
+func isProviderBlockedMessage(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, marker := range providerBlockedMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // classifyProbeError maps an executor error onto a probe status. nil means the
 // request may still be classified usable (caller decides); error-free probes
 // never reach here.
 func classifyProbeError(err error) Status {
 	if err == nil {
 		return StatusUsable
+	}
+	// The provider's third-party block phase wins over everything: a 401 that
+	// carries the marker text is neither a dead credential (auth_error) nor a
+	// prunable "model unavailable".
+	if isProviderBlockedMessage(err) {
+		return StatusProviderBlocked
 	}
 	status := 0
 	if se, ok := err.(interface{ StatusCode() int }); ok {

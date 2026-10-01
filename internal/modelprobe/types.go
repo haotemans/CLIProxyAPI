@@ -30,6 +30,13 @@ const (
 	// StatusAuthError means the credential itself was rejected; models keep
 	// being advertised and the section records the credential problem.
 	StatusAuthError Status = "auth_error"
+	// StatusProviderBlocked means the provider is blocking ALL third-party
+	// access for the account tier right now (e.g. Cline's periodic third-party
+	// clampdown answering 401 "latest version of Cline" for every model). It is
+	// NOT a credential failure and NOT "model unavailable": nothing prunes, the
+	// credential is flagged instead, and the whole advertised set is hidden
+	// from routing until a later probe succeeds.
+	StatusProviderBlocked Status = "provider_blocked"
 	// StatusUnreachable means the upstream could not be reached; keep the
 	// model and retry next cycle.
 	StatusUnreachable Status = "unreachable"
@@ -54,6 +61,9 @@ type Section struct {
 	Pruned []string `json:"pruned,omitempty"`
 	// PerModel records every model outcome (usable included) keyed by model ID.
 	PerModel map[string]*ModelOutcome `json:"models,omitempty"`
+	// CatalogSize records how many candidates the cycle probed; status UIs
+	// display it as the curated catalog size for the credential.
+	CatalogSize int `json:"catalog_size,omitempty"`
 
 	// Skipped marks a whole-credential skip for the cycle (e.g. auth_error
 	// backoff); the section then records when/why instead of probing.
@@ -64,6 +74,21 @@ type Section struct {
 	SkipCycle uint64 `json:"skip_cycle,omitempty"`
 	// Skips explains per-model skips (limited backoff), keyed by model ID.
 	Skips map[string]string `json:"skips,omitempty"`
+}
+
+// IsProviderBlocked reports whether EVERY recorded outcome is provider_blocked:
+// the credential is in a full third-party block phase (all ads drop out of
+// routing until a next probe succeeds). Empty sections are never blocked.
+func (s *Section) IsProviderBlocked() bool {
+	if s == nil || len(s.PerModel) == 0 {
+		return false
+	}
+	for _, outcome := range s.PerModel {
+		if outcome == nil || outcome.Status != StatusProviderBlocked {
+			return false
+		}
+	}
+	return true
 }
 
 // ReadSection extracts the probe section from credential metadata. Absence

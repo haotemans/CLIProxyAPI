@@ -73,6 +73,12 @@ func (h *Handler) GetModelProbeStatus(c *gin.Context) {
 			row["checked_at"] = section.CheckedAt
 			row["usable"] = len(section.Usable)
 			row["pruned"] = len(section.Pruned)
+			if section.CatalogSize > 0 {
+				row["catalog_size"] = section.CatalogSize
+			}
+			if section.IsProviderBlocked() {
+				row["status"] = string(modelprobe.StatusProviderBlocked)
+			}
 			if len(section.Pruned) > 0 {
 				row["pruned_models"] = section.Pruned
 			}
@@ -182,6 +188,15 @@ func (h *Handler) inlineModelProbe(ctx context.Context, auth *cliproxyauth.Auth)
 			continue
 		}
 		ids = append(ids, model.ID)
+	}
+	if len(ids) == 0 {
+		// Registration may be empty during a provider block phase (the whole
+		// set hides); recoverability needs the last probed candidates.
+		if section := modelprobe.ReadSection(auth.Metadata); section != nil {
+			for id := range section.PerModel {
+				ids = append(ids, id)
+			}
+		}
 	}
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("credential has no registered models to probe")

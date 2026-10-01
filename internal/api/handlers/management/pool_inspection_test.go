@@ -35,8 +35,8 @@ func setupInspectionHandler(t *testing.T) *Handler {
 	registerInspectionAuth(t, mgr, &coreauth.Auth{
 		ID: "codex-expired.json", FileName: "codex-expired.json", Provider: "codex",
 		Status: coreauth.StatusError, Unavailable: true,
-		Attributes:  map[string]string{"path": "/auths/codex-expired.json"},
-		LastError:   &coreauth.Error{HTTPStatus: 401, Message: "token expired"},
+		Attributes:      map[string]string{"path": "/auths/codex-expired.json"},
+		LastError:       &coreauth.Error{HTTPStatus: 401, Message: "token expired"},
 		LastRefreshedAt: time.Now().Add(-48 * time.Hour),
 	})
 
@@ -51,7 +51,7 @@ func setupInspectionHandler(t *testing.T) *Handler {
 	// Quota-exhausted claude credential → warn + rotate.
 	registerInspectionAuth(t, mgr, &coreauth.Auth{
 		ID: "claude-quota.json", FileName: "claude-quota.json", Provider: "claude",
-		Status: coreauth.StatusActive,
+		Status:     coreauth.StatusActive,
 		Attributes: map[string]string{"path": "/auths/claude-quota.json"},
 		Quota: coreauth.QuotaState{
 			Exceeded:      true,
@@ -63,7 +63,7 @@ func setupInspectionHandler(t *testing.T) *Handler {
 	// Probe-flagged auth error → bad + relogin even without traffic.
 	registerInspectionAuth(t, mgr, &coreauth.Auth{
 		ID: "codex-probe.json", FileName: "codex-probe.json", Provider: "codex",
-		Status: coreauth.StatusActive,
+		Status:     coreauth.StatusActive,
 		Attributes: map[string]string{"path": "/auths/codex-probe.json"},
 		Metadata: map[string]any{
 			modelprobe.MetadataKey: map[string]any{
@@ -134,12 +134,12 @@ func TestGetPoolInspection(t *testing.T) {
 			Health      string   `json:"health"`
 			Suggestions []string `json:"suggestions"`
 			Signals     struct {
-				Requests24H   int64  `json:"requests_24h"`
-				Errors24H     int64  `json:"errors_24h"`
-				DominantError string `json:"dominant_error"`
-				QuotaExceeded bool   `json:"quota_exceeded"`
-				ProbeAuthError bool  `json:"probe_auth_error"`
-				Unauthorized  bool   `json:"unauthorized"`
+				Requests24H    int64  `json:"requests_24h"`
+				Errors24H      int64  `json:"errors_24h"`
+				DominantError  string `json:"dominant_error"`
+				QuotaExceeded  bool   `json:"quota_exceeded"`
+				ProbeAuthError bool   `json:"probe_auth_error"`
+				Unauthorized   bool   `json:"unauthorized"`
 			} `json:"signals"`
 		} `json:"credentials"`
 		Summary map[string]int `json:"summary"`
@@ -245,5 +245,100 @@ func TestGetPoolInspection(t *testing.T) {
 		if cred.Provider != "claude" {
 			t.Fatalf("provider filter leaked %q", cred.Provider)
 		}
+	}
+}
+
+func TestGetPoolInspection_ProviderBlockedSuggestsWaitNotRelogin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	restore := usagestats.SetGlobalForTest(nil)
+	defer restore()
+
+	mgr := coreauth.NewManager(nil, nil, nil)
+	blockedSection := map[string]any{
+		"checked_at":   time.Now().UTC().Format(time.RFC3339),
+		"catalog_size": 3,
+		"models": map[string]any{
+			"a": map[string]any{"status": "provider_blocked"},
+			"b": map[string]any{"status": "provider_blocked"},
+		},
+	}
+	registerInspectionAuth(t, mgr, &coreauth.Auth{
+		ID: "cline-blocked.json", FileName: "cline-blocked.json", Provider: "cline",
+		Status:     coreauth.StatusActive,
+		Attributes: map[string]string{"path": "/auths/cline-blocked.json"},
+		Metadata: map[string]any{
+			modelprobe.MetadataKey: blockedSection,
+		},
+	})
+	authErr := &coreauth.Auth{
+		ID: "cline-autherr.json", FileName: "cline-autherr.json", Provider: "cline",
+		Status:     coreauth.StatusActive,
+		Attributes: map[string]string{"path": "/auths/cline-autherr.json"},
+		Metadata: map[string]any{
+			modelprobe.MetadataKey: map[string]any{
+				"checked_at": time.Now().UTC().Format(time.RFC3339),
+				"models": map[string]any{
+					"a": map[string]any{"status": "auth_error"},
+				},
+			},
+		},
+	}
+	registerInspectionAuth(t, mgr, authErr)
+
+	h := &Handler{authManager: mgr}
+	router := gin.New()
+	router.GET("/pool-inspection", h.GetPoolInspection)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/pool-inspection?provider=cline", nil)
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Credentials []struct {
+			AuthFile    string   `json:"auth_file"`
+			Health      string   `json:"health"`
+			Suggestions []string `json:"suggestions"`
+			Signals     struct {
+				ProbeBlocked   bool `json:"probe_blocked"`
+				ProbeAuthError bool `json:"probe_auth_error"`
+			} `json:"signals"`
+		} `json:"credentials"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	if len(payload.Credentials) != 2 {
+		t.Fatalf("credentials = %d, want 2", len(payload.Credentials))
+	}
+	byFile := map[string]struct {
+		Health      string
+		Suggestions []string
+		Blocked     bool
+	}{}
+	for _, cred := range payload.Credentials {
+		byFile[cred.AuthFile] = struct {
+			Health      string
+			Suggestions []string
+			Blocked     bool
+		}{cred.Health, cred.Suggestions, cred.Signals.ProbeBlocked}
+	}
+	blocked := byFile["cline-blocked.json"]
+	if blocked.Health != "warn" {
+		t.Fatalf("blocked credential health = %q, want warn (not bad, not good)", blocked.Health)
+	}
+	if len(blocked.Suggestions) != 1 || blocked.Suggestions[0] != "wait-provider" {
+		t.Fatalf("blocked suggestions = %v, want [wait-provider]", blocked.Suggestions)
+	}
+	if !blocked.Blocked {
+		t.Fatal("probe_blocked signal missing")
+	}
+	authErrFile := byFile["cline-autherr.json"]
+	if len(authErrFile.Suggestions) != 1 || authErrFile.Suggestions[0] != "relogin" {
+		t.Fatalf("auth_error suggestions = %v, want [relogin]", authErrFile.Suggestions)
+	}
+	if authErrFile.Health != "warn" && authErrFile.Health != "bad" {
+		t.Fatalf("auth_error credential health = %q", authErrFile.Health)
 	}
 }
