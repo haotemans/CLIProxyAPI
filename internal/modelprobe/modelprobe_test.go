@@ -307,12 +307,15 @@ func TestStartStopWithFakeTicker(t *testing.T) {
 	tick := make(chan time.Time)
 	stopCalled := make(chan struct{}, 1)
 	completed := make(chan struct{}, 4)
+	jitter := 0.5
 	scheduler := NewScheduler(engine, nil,
 		func() []*cliproxyauth.Auth { return []*cliproxyauth.Auth{auth} },
 		func(*cliproxyauth.Auth) []string { return []string{"composer-2"} },
 		SchedulerOptions{
-			Interval: time.Minute,
-			NewTicker: func(time.Duration) (<-chan time.Time, func()) {
+			Interval:   time.Minute,
+			Jitter:     &jitter,
+			JitterRand: func() float64 { return 0.5 }, // exact-interval for determinism
+			NewTimer: func(time.Duration) (<-chan time.Time, func()) {
 				return tick, func() { close(stopCalled) }
 			},
 		},
@@ -327,8 +330,16 @@ func TestStartStopWithFakeTicker(t *testing.T) {
 	}
 	select {
 	case <-stopCalled:
-		t.Fatal("ticker stopped before tick")
+		t.Fatal("timer stopped before tick")
 	default:
+	}
+
+	// After the boot cycle the next run must be scheduled (~interval with the
+	// deterministic jitter source).
+	if at, ok := NextRunAt(); !ok {
+		t.Fatal("next run not published after boot cycle")
+	} else if got := time.Until(at); got < 30*time.Second || got > 90*time.Second {
+		t.Fatalf("next run %v out of jitter bounds", got)
 	}
 
 	tick <- time.Now()
@@ -338,6 +349,7 @@ func TestStartStopWithFakeTicker(t *testing.T) {
 		t.Fatal("interval cycle never completed")
 	}
 	scheduler.Stop()
+	ClearNextRun()
 	if len(mock.calls) != 2 {
 		t.Fatalf("mock calls = %v, want 2 (boot + interval probe)", len(mock.calls))
 	}

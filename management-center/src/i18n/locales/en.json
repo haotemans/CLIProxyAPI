@@ -410,7 +410,9 @@
     "probe_never": "Models not probed yet",
     "probe_summary": "Probe: {{usable}} usable · {{pruned}} pruned · {{checked_at}}",
     "probe_failed": "Probe failed: {{message}}",
-    "probe_pruned_detail": "Pruned: {{models}}"
+    "probe_pruned_detail": "Pruned: {{models}}",
+    "probe_skipped": "Skipped: {{reason}}",
+    "probe_never_next": "Not probed yet · next ~{{in}}"
   },
   "antigravity_subscription": {
     "plan_unknown": "Unknown",

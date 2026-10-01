@@ -50,6 +50,7 @@ export type AuthFileCardProps = {
   /** 首屏一次性级联入场的延迟；null/undefined 表示不做入场动画。 */
   entranceDelayMs?: number | null;
   modelProbeRow?: import('@/features/authFiles/modelProbe/logic').ProbeRowByFile[string];
+  modelProbeNextRunAt?: string;
   onModelProbed?: (file: string, summary: {
     probed?: boolean;
     checked_at?: string;
@@ -81,6 +82,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
     statusBarCache,
     entranceDelayMs,
     modelProbeRow,
+    modelProbeNextRunAt,
     onModelProbed,
     onShowModels,
     onDownload,
@@ -246,7 +248,12 @@ export function AuthFileCard(props: AuthFileCardProps) {
       )}
 
       {!isRuntimeOnly && !compact && onModelProbed && (
-        <AuthFileProbeSection file={file} row={modelProbeRow} onProbed={onModelProbed} />
+        <AuthFileProbeSection
+          file={file}
+          row={modelProbeRow}
+          nextRunAt={modelProbeNextRunAt}
+          onProbed={onModelProbed}
+        />
       )}
 
       <footer className={styles.actions}>

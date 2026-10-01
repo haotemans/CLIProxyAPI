@@ -12,6 +12,9 @@ export interface ModelProbeCredentialRow {
   usable?: number;
   pruned?: number;
   pruned_models?: string[];
+  skip_reason?: string;
+  skip_cycle?: number;
+  skips?: Record<string, string>;
 }
 
 export interface ModelProbeStatusResponse {
@@ -20,6 +23,7 @@ export interface ModelProbeStatusResponse {
   max_parallel?: number;
   supported_drivers?: string[];
   credentials?: ModelProbeCredentialRow[];
+  next_run_at?: string;
 }
 
 export interface ModelProbeRunModelRow {

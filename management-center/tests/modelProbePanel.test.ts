@@ -2,6 +2,7 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import { modelProbeApi } from '@/features/authFiles/modelProbe/api';
 import {
   formatCheckedAt,
+  formatRelativeFromNow,
   mergeProbeSummary,
   PROBE_SUPPORTED_PROVIDERS,
   rowsToMap,
@@ -84,5 +85,23 @@ describe('modelProbeApi.run', () => {
     } finally {
       get.mockRestore();
     }
+  });
+});
+
+describe('formatRelativeFromNow', () => {
+  test('soon / minutes / hours / days', () => {
+    const now = Date.parse('2026-10-01T00:00:00Z');
+    expect(formatRelativeFromNow('2026-10-01T00:00:30Z', now)).toBe('soon');
+    expect(formatRelativeFromNow('2026-10-01T00:30:00Z', now)).toBe('30m');
+    expect(formatRelativeFromNow('2026-10-01T06:00:00Z', now)).toBe('6h');
+    expect(formatRelativeFromNow('2026-10-02T12:00:00Z', now)).toBe('36h');
+    expect(formatRelativeFromNow('2026-10-04T12:00:00Z', now)).toBe('4d');
+    expect(formatRelativeFromNow(undefined, now)).toBe('');
+    expect(formatRelativeFromNow('not-a-date', now)).toBe('');
+  });
+
+  test('status response carries next_run_at', () => {
+    const response = { enabled: true, next_run_at: '2026-10-02T00:00:00Z', credentials: [] };
+    expect(response.next_run_at).toBeTruthy();
   });
 });

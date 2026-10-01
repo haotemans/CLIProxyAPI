@@ -408,7 +408,9 @@
     "probe_never": "尚未探測模型",
     "probe_summary": "模型探測:可用 {{usable}} · 剔除 {{pruned}} · {{checked_at}}",
     "probe_failed": "探測失敗:{{message}}",
-    "probe_pruned_detail": "已剔除:{{models}}"
+    "probe_pruned_detail": "已剔除:{{models}}",
+    "probe_skipped": "已跳過:{{reason}}",
+    "probe_never_next": "尚未探測 · 下次 ~{{in}}"
   },
   "antigravity_subscription": {
     "plan_unknown": "未知",

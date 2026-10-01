@@ -413,7 +413,9 @@
     "probe_never": "Модели еще не проверялись",
     "probe_summary": "Проверка: {{usable}} доступно · {{pruned}} отсеяно · {{checked_at}}",
     "probe_failed": "Ошибка проверки: {{message}}",
-    "probe_pruned_detail": "Отсеяно: {{models}}"
+    "probe_pruned_detail": "Отсеяно: {{models}}",
+    "probe_skipped": "Пропущено: {{reason}}",
+    "probe_never_next": "Еще не проверялось · след. ~{{in}}"
   },
   "antigravity_subscription": {
     "plan_unknown": "Неизвестно",

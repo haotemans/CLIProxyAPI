@@ -47,9 +47,13 @@ func MergeSections(previous, fresh *Section) *Section {
 		return fresh
 	}
 	combined := &Section{
-		CheckedAt: fresh.CheckedAt,
-		Usable:    append([]string(nil), fresh.Usable...),
-		PerModel:  make(map[string]*ModelOutcome, len(previous.PerModel)+len(fresh.PerModel)),
+		CheckedAt:  fresh.CheckedAt,
+		Usable:     append([]string(nil), fresh.Usable...),
+		PerModel:   make(map[string]*ModelOutcome, len(previous.PerModel)+len(fresh.PerModel)),
+		Skipped:    fresh.Skipped,
+		SkipReason: fresh.SkipReason,
+		SkipCycle:  fresh.SkipCycle,
+		Skips:      fresh.Skips,
 	}
 	stillUnavailable := make(map[string]struct{}, len(previous.Pruned))
 	for id, outcome := range previous.PerModel {

@@ -425,6 +425,13 @@ type ModelProbeConfig struct {
 	// MaxModelsPerCredentialPerCycle caps per-credential probes per cycle
 	// (0 = unlimited). Guard rail for huge catalogs on precious quotas.
 	MaxModelsPerCredentialPerCycle int `yaml:"max-models-per-credential-per-cycle" json:"max-models-per-credential-per-cycle"`
+	// Jitter randomizes the next cycle's start within interval*(1±jitter).
+	// Omitted means 0.5 (50%); explicit 0 restores an exact fixed cadence
+	// (detectable by upstream risk control).
+	Jitter *float64 `yaml:"jitter,omitempty" json:"jitter,omitempty"`
+	// ProbeSpacing is the duration range slept before every single probe,
+	// formatted "min-max" (e.g. "3s-12s"). Default "3s-12s".
+	ProbeSpacing string `yaml:"probe-spacing" json:"probe-spacing"`
 }
 
 // UsageStatsConfig controls the native usage/cost statistics recorder and

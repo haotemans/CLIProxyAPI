@@ -823,9 +823,16 @@ requests:
 # panel (认证文件 card probe line), API:
 #   GET  /v0/management/model-probe/status
 #   POST /v0/management/model-probe/run {"auth_index": "..."}
+# Risk control: a fixed cadence is a detectable bot pattern. jitter randomizes
+# every cycle start (interval*(1±jitter), default 50%), probe-spacing sleeps a
+# random 3-12s between individual probes, `limited` models are probed at most
+# every 2nd cycle, and auth_error-flagged credentials every 4th. Longer
+# intervals (24h recommended) are stealthier; shorter ones are detectable.
 # model-probe:
 #   enabled: false                  # default off (safe); probes contact upstreams
-#   interval: 21600                 # cycle interval in seconds (default 6h)
+#   interval: 86400                 # cycle interval in seconds (24h recommended; default 6h when unset)
+#   jitter: 0.5                     # next-start randomization fraction 0-1 (0 = exact fixed cadence = detectable)
+#   probe-spacing: "3s-12s"         # random sleep range before each probe
 #   max-parallel: 4                 # concurrent in-flight probes
 #   max-models-per-credential-per-cycle: 0  # 0 = probe every advertised model
 

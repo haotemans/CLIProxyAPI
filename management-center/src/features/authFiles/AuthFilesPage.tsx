@@ -179,7 +179,8 @@ export function AuthFilesPage() {
     loadFiles,
   });
 
-  const { rowsByFile: modelProbeRows, updateRow: updateModelProbeRow } = useModelProbeStatus(files);
+  const { rowsByFile: modelProbeRows, nextRunAt: modelProbeNextRunAt, updateRow: updateModelProbeRow } =
+    useModelProbeStatus(files);
 
   const disableControls = connectionStatus !== 'connected';
   const normalizedFilter = normalizeProviderKey(String(filter));
@@ -702,6 +703,7 @@ export function AuthFilesPage() {
                 statusBarCache={statusBarCache}
                 entranceDelayMs={cardEntranceDelay(index)}
                 modelProbeRow={modelProbeRows[file.name]}
+                modelProbeNextRunAt={modelProbeNextRunAt}
                 onModelProbed={updateModelProbeRow}
                 onShowModels={showModels}
                 onDownload={handleDownload}

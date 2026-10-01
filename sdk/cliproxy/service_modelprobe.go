@@ -45,12 +45,21 @@ func (s *Service) ensureModelProbeScheduler(ctx context.Context) {
 	if max := s.cfg.ModelProbe.MaxParallel; max > 0 {
 		opts.MaxParallel = max
 	}
+	if spacingMin, spacingMax, errSpacing := modelprobe.SpacingRange(s.cfg.ModelProbe.ProbeSpacing); errSpacing != nil {
+		log.Warnf("modelprobe: invalid probe-spacing %q, using default: %v", s.cfg.ModelProbe.ProbeSpacing, errSpacing)
+		opts.SpacingMin, opts.SpacingMax, _ = modelprobe.SpacingRange("")
+	} else {
+		opts.SpacingMin, opts.SpacingMax = spacingMin, spacingMax
+	}
 	engine := modelprobe.NewEngine(s.cfg, opts)
 	store := &modelprobe.Store{AuthDir: s.cfg.AuthDir}
 	scheduler := modelprobe.NewScheduler(engine, store,
 		s.modelProbeAuths,
 		s.modelProbeCatalog,
-		modelprobe.SchedulerOptions{Interval: s.modelProbeInterval()},
+		modelprobe.SchedulerOptions{
+			Interval: s.modelProbeInterval(),
+			Jitter:   s.cfg.ModelProbe.Jitter,
+		},
 	)
 	s.modelProbe = scheduler
 	scheduler.Start(ctx)

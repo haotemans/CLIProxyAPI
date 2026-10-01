@@ -54,6 +54,16 @@ type Section struct {
 	Pruned []string `json:"pruned,omitempty"`
 	// PerModel records every model outcome (usable included) keyed by model ID.
 	PerModel map[string]*ModelOutcome `json:"models,omitempty"`
+
+	// Skipped marks a whole-credential skip for the cycle (e.g. auth_error
+	// backoff); the section then records when/why instead of probing.
+	Skipped bool `json:"skipped,omitempty"`
+	// SkipReason humanizes Skipped (e.g. "auth_error backoff (every 4th cycle)").
+	SkipReason string `json:"skip_reason,omitempty"`
+	// SkipCycle indexes the cycle counter the skip happened at.
+	SkipCycle uint64 `json:"skip_cycle,omitempty"`
+	// Skips explains per-model skips (limited backoff), keyed by model ID.
+	Skips map[string]string `json:"skips,omitempty"`
 }
 
 // ReadSection extracts the probe section from credential metadata. Absence

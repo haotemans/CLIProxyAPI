@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
@@ -67,6 +68,15 @@ type Options struct {
 	NowFunc func() time.Time
 	// LogPrefix prefixes engine log lines; default "modelprobe".
 	LogPrefix string
+	// Spacing is the min-max sleep sampled before every single probe
+	// (risk-control smoothing). Zero disables spacing.
+	SpacingMin time.Duration
+	SpacingMax time.Duration
+	// SpacingRand samples [0,1) for spacing; default rand.Float64.
+	SpacingRand func() float64
+	// Sleeper applies the spacing delay (injectable for tests); default
+	// sleeps via time.After honoring ctx cancellation.
+	Sleeper func(ctx context.Context, d time.Duration) error
 }
 
 // Engine runs minimal live probes against provider executors.
@@ -198,6 +208,9 @@ func probeAll(ctx context.Context, e *Engine, auth *cliproxyauth.Auth, provider 
 			if ctx.Err() != nil {
 				break
 			}
+			if errSpace := e.applySpacing(ctx); errSpace != nil {
+				break
+			}
 			outcomes[model] = e.ProbeOne(ctx, auth, provider, model)
 		}
 		return outcomes
@@ -215,6 +228,9 @@ func probeAll(ctx context.Context, e *Engine, auth *cliproxyauth.Auth, provider 
 			if ctx.Err() != nil {
 				return
 			}
+			if errSpace := e.applySpacing(ctx); errSpace != nil {
+				return
+			}
 			outcome := e.ProbeOne(ctx, auth, provider, model)
 			mu.Lock()
 			outcomes[model] = outcome
@@ -223,6 +239,42 @@ func probeAll(ctx context.Context, e *Engine, auth *cliproxyauth.Auth, provider 
 	}
 	wg.Wait()
 	return outcomes
+}
+
+// applySpacing sleeps the sampled spacing before a single probe. It is a
+// no-op when no spacing is configured and respects ctx cancellation.
+func (e *Engine) applySpacing(ctx context.Context) error {
+	min, max := e.opts.SpacingMin, e.opts.SpacingMax
+	if min <= 0 && max <= 0 {
+		return nil
+	}
+	if max < min {
+		min, max = max, min
+	}
+	span := max - min
+	delay := min
+	if span > 0 {
+		u := rand.Float64()
+		if e.opts.SpacingRand != nil {
+			u = e.opts.SpacingRand()
+		}
+		delay = min + time.Duration(float64(span)*u)
+	}
+	if delay <= 0 {
+		return nil
+	}
+	sleeper := e.opts.Sleeper
+	if sleeper == nil {
+		sleeper = func(ctx context.Context, d time.Duration) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(d):
+				return nil
+			}
+		}
+	}
+	return sleeper(ctx, delay)
 }
 
 // synthesizeSection flattens outcomes into the persisted section. Only

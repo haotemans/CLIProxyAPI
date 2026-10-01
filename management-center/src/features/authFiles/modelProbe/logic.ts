@@ -63,3 +63,19 @@ export const formatCheckedAt = (iso: string | undefined): string => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+
+/**
+ * Relative "in ~X" label for the next scheduled probe (jitter-aware):
+ * "~2h", "~9h", "~2d", or "soon" within the next minute.
+ */
+export const formatRelativeFromNow = (iso: string | undefined, now: number): string => {
+  if (!iso) return '';
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return '';
+  const diffMs = ms - now;
+  if (diffMs < 60_000) return 'soon';
+  const hours = diffMs / 3_600_000;
+  if (hours < 1) return `${Math.max(1, Math.round(diffMs / 60_000))}m`;
+  if (hours < 48) return `${Math.round(hours)}h`;
+  return `${Math.round(hours / 24)}d`;
+};

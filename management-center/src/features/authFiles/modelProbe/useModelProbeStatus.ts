@@ -8,6 +8,7 @@ interface UseModelProbeStatusResult {
   rowsByFile: ProbeRowByFile;
   enabled: boolean;
   supportedDrivers: string[];
+  nextRunAt?: string;
   updateRow: (file: string, summary: {
     probed?: boolean;
     checked_at?: string;
@@ -27,6 +28,7 @@ export function useModelProbeStatus(files: AuthFileItem[]): UseModelProbeStatusR
   const [rowsByFile, setRowsByFile] = useState<ProbeRowByFile>({});
   const [enabled, setEnabled] = useState(false);
   const [supportedDrivers, setSupportedDrivers] = useState<string[]>([]);
+  const [nextRunAt, setNextRunAt] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (connectionStatus !== 'connected' || files.length === 0) {
@@ -41,6 +43,7 @@ export function useModelProbeStatus(files: AuthFileItem[]): UseModelProbeStatusR
         setRowsByFile(rowsToMap(response.credentials ?? []));
         setEnabled(Boolean(response.enabled));
         setSupportedDrivers(response.supported_drivers ?? []);
+        setNextRunAt(response.next_run_at);
       } catch {
         if (!cancelled) {
           setRowsByFile({});
@@ -75,5 +78,5 @@ export function useModelProbeStatus(files: AuthFileItem[]): UseModelProbeStatusR
     []
   );
 
-  return { rowsByFile, enabled, supportedDrivers, updateRow };
+  return { rowsByFile, enabled, supportedDrivers, nextRunAt, updateRow };
 }

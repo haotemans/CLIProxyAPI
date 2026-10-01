@@ -76,6 +76,13 @@ func (h *Handler) GetModelProbeStatus(c *gin.Context) {
 			if len(section.Pruned) > 0 {
 				row["pruned_models"] = section.Pruned
 			}
+			if section.Skipped && section.SkipReason != "" {
+				row["skip_reason"] = section.SkipReason
+				row["skip_cycle"] = section.SkipCycle
+			}
+			if len(section.Skips) > 0 {
+				row["skips"] = section.Skips
+			}
 		} else {
 			row["probed"] = false
 		}
@@ -91,13 +98,17 @@ func (h *Handler) GetModelProbeStatus(c *gin.Context) {
 			maxParallel = s
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{
+	payload := gin.H{
 		"enabled":           h.cfg != nil && h.cfg.ModelProbe.Enabled,
 		"interval_seconds":  interval,
 		"max_parallel":      maxParallel,
 		"supported_drivers": modelprobe.SupportedProviders(),
 		"credentials":       rows,
-	})
+	}
+	if next, ok := modelprobe.NextRunAt(); ok {
+		payload["next_run_at"] = next.UTC().Format(time.RFC3339)
+	}
+	c.JSON(http.StatusOK, payload)
 }
 
 type modelProbeRunRequest struct {
