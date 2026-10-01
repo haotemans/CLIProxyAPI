@@ -8,11 +8,62 @@ import (
 	"time"
 
 	clineauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/cline"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v8/sdk/auth"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
 )
+
+// clinePaidTiersEnabled reports whether subscription-gated families
+// (clinePass + clineCloud) join a credential's catalog. api-keys.cline
+// credentials (auth kind apikey — the subscription keys those families exist
+// for) always see them; OAuth auth files see them when the per-credential
+// include_paid_tiers flag or the global cline.include-paid-tiers knob is set.
+func clinePaidTiersEnabled(cfg *config.Config, auth *coreauth.Auth) bool {
+	if auth != nil && auth.AuthKind() == coreauth.AuthKindAPIKey {
+		return true
+	}
+	if auth != nil {
+		if auth.Attributes != nil && strings.EqualFold(strings.TrimSpace(auth.Attributes["include_paid_tiers"]), "true") {
+			return true
+		}
+		if auth.Metadata != nil {
+			if flag, ok := auth.Metadata["include_paid_tiers"].(bool); ok && flag {
+				return true
+			}
+		}
+	}
+	if cfg != nil && cfg.Cline.IncludePaidTiers != nil {
+		return *cfg.Cline.IncludePaidTiers
+	}
+	return false
+}
+
+// clineModelBucketMarkers are persisted next to the detected catalog so the
+// probe engine and the panel can read the curated tier composition without
+// refetching: {"recommended": n, "free": n, "paid": n}.
+const ModelsTiersMetadataKey = "models_tiers"
+
+// clineCatalogForAccount builds the curated per-account catalog: the curated
+// recommended-models feed is the primary source (recommended + free always,
+// paid tiers per credential/knob), with the full /ai/cline/models catalog as
+// fallback when the feed fails. Returns (models, tier counts, error).
+func (s *Service) clineCatalogForAccount(ctx context.Context, svc *clineauth.ClineAuth, auth *coreauth.Auth, token string) ([]clineauth.ClineModelInfo, map[string]int, error) {
+	catalog, errFeed := svc.FetchRecommendedModels(ctx, token)
+	if errFeed != nil {
+		// The full catalog is the imperative fallback: some deployments mirror
+		// old versions without the curated feed, and accounts that require the
+		// complete list still need a working detection.
+		models, errFull := svc.FetchAvailableModels(ctx, token)
+		if errFull != nil {
+			return nil, nil, errFeed
+		}
+		return models, nil, nil
+	}
+	includePaid := clinePaidTiersEnabled(s.cfg, auth)
+	return catalog.Flat(includePaid), catalog.TierCounts(), nil
+}
 
 // maybeDetectClineModels lazily detects the per-account model catalog for a
 // cline credential that has no stored models yet (typical case: a manually
@@ -57,7 +108,7 @@ func (s *Service) maybeDetectClineModels(auth *coreauth.Auth) {
 			}
 			token, baseURL := clineCredentialDetails(current)
 			svc := clineauth.NewClineAuthWithProxyURLAndBaseURL(s.cfg, current.ProxyURL, baseURL)
-			models, errFetch := svc.FetchAvailableModels(ctx, token)
+			models, tiers, errFetch := s.clineCatalogForAccount(ctx, svc, current, token)
 			if errFetch != nil {
 				log.Warnf("cline: per-account model detection failed for %s: %v", authID, errFetch)
 				return nil // Not persisted: the next auth lifecycle event may retry.
@@ -71,6 +122,11 @@ func (s *Service) maybeDetectClineModels(auth *coreauth.Auth) {
 				updated.Metadata = make(map[string]any)
 			}
 			updated.Metadata[clineauth.ModelsMetadataKey] = models
+			if tiers != nil {
+				updated.Metadata[ModelsTiersMetadataKey] = tiers
+			} else {
+				delete(updated.Metadata, ModelsTiersMetadataKey)
+			}
 			if _, errSave := sdkAuth.GetTokenStore().Save(ctx, updated); errSave != nil {
 				return errSave
 			}
@@ -156,7 +212,7 @@ func (s *Service) discoverClineModels(ctx context.Context, a *coreauth.Auth) []c
 		defer transport.CloseIdleConnections()
 	}
 
-	endpoint := strings.TrimSuffix(baseURL, "/") + "/ai/cline/models"
+	endpoint := strings.TrimSuffix(baseURL, "/") + "/ai/cline/recommended-models"
 	req, err := http.NewRequestWithContext(fetchCtx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		log.Warnf("cline: failed to build model discovery request: %v", err)
@@ -164,6 +220,7 @@ func (s *Service) discoverClineModels(ctx context.Context, a *coreauth.Auth) []c
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Accept", "application/json")
+	clineauth.ApplyClientHeaders(req, nil)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -176,7 +233,48 @@ func (s *Service) discoverClineModels(ctx context.Context, a *coreauth.Auth) []c
 		}
 	}()
 	if resp.StatusCode != http.StatusOK {
-		log.Debugf("cline: model discovery returned status %d, using fallback catalog", resp.StatusCode)
+		log.Debugf("cline: recommended-models feed returned status %d, falling back to the full catalog", resp.StatusCode)
+		return s.discoverClineModelsFull(fetchCtx, client, baseURL, apiKey)
+	}
+	raw, errRead := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if errRead != nil {
+		return nil
+	}
+	catalog, errParse := clineauth.ParseRecommendedModels(raw)
+	if errParse != nil {
+		return nil
+	}
+	// api-keys.cline credentials are the subscription keys the paid families
+	// exist for; curated feed wins over the full 463-entry import spam.
+	models := catalog.Flat(true)
+	if len(models) == 0 {
+		return nil
+	}
+	log.Infof("cline: discovered %d curated models for api key via %s", len(models), baseURL)
+	return models
+}
+
+// discoverClineModelsFull is the /ai/cline/models fallback path used when the
+// curated feed is unavailable (old deployments, mirrors without the feed).
+func (s *Service) discoverClineModelsFull(ctx context.Context, client *http.Client, baseURL, apiKey string) []clineauth.ClineModelInfo {
+	endpoint := strings.TrimSuffix(baseURL, "/") + "/ai/cline/models"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Accept", "application/json")
+	clineauth.ApplyClientHeaders(req, nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer func() {
+		if errClose := resp.Body.Close(); errClose != nil {
+			log.Errorf("cline: model discovery close body error: %v", errClose)
+		}
+	}()
+	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
 	raw, errRead := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -187,6 +285,6 @@ func (s *Service) discoverClineModels(ctx context.Context, a *coreauth.Auth) []c
 	if errParse != nil || len(models) == 0 {
 		return nil
 	}
-	log.Infof("cline: discovered %d models for api key via %s", len(models), baseURL)
+	log.Infof("cline: discovered %d models for api key via full catalog at %s (curated feed unavailable)", len(models), baseURL)
 	return models
 }

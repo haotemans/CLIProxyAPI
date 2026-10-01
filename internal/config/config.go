@@ -110,6 +110,10 @@ type Config struct {
 	// requests (GET /v0/management/model-probe/*). Disabled by default.
 	ModelProbe ModelProbeConfig `yaml:"model-probe" json:"model-probe"`
 
+	// Cline tunes the Cline account backend catalog behavior shared by every
+	// cline credential kind (recommended-tier catalog composition only).
+	Cline ClineConfig `yaml:"cline" json:"cline"`
+
 	// WebsocketAuth enables or disables authentication for the WebSocket API.
 	WebsocketAuth bool `yaml:"ws-auth" json:"ws-auth"`
 

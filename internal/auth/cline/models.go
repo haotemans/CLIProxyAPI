@@ -86,6 +86,136 @@ func (a *ClineAuth) FetchAvailableModels(ctx context.Context, accessToken string
 	return models, nil
 }
 
+// ClineRecommendedCatalog is the curated model feed the official Cline
+// extension's picker consumes (ai/cline/recommended-models): recommended and
+// free are usable tiers for any account, clinePass and clineCloud are
+// subscription-gated families that only make sense for pass holders.
+type ClineRecommendedCatalog struct {
+	Recommended []ClineModelInfo `json:"recommended,omitempty"`
+	Free        []ClineModelInfo `json:"free,omitempty"`
+	ClinePass   []ClineModelInfo `json:"clinePass,omitempty"`
+	ClineCloud  []ClineModelInfo `json:"clineCloud,omitempty"`
+}
+
+// TierCounts returns the probe-friendly bucket markers persisted alongside
+// the detected catalog so probe scheduling can prefer free tier first.
+func (c *ClineRecommendedCatalog) TierCounts() map[string]int {
+	if c == nil {
+		return nil
+	}
+	return map[string]int{
+		"recommended": len(c.Recommended),
+		"free":        len(c.Free),
+		"paid":        len(c.ClinePass) + len(c.ClineCloud),
+	}
+}
+
+// Flat returns the deduped catalog in bucket order (recommended, free, then
+// clinePass and clineCloud when includePaid is true).
+func (c *ClineRecommendedCatalog) Flat(includePaid bool) []ClineModelInfo {
+	if c == nil {
+		return nil
+	}
+	out := make([]ClineModelInfo, 0, len(c.Recommended)+len(c.Free))
+	seen := make(map[string]struct{}, len(out))
+	appendEntry := func(entries []ClineModelInfo) {
+		for _, entry := range entries {
+			id := strings.TrimSpace(entry.ID)
+			if id == "" {
+				continue
+			}
+			if _, dup := seen[id]; dup {
+				continue
+			}
+			seen[id] = struct{}{}
+			out = append(out, entry)
+		}
+	}
+	appendEntry(c.Recommended)
+	appendEntry(c.Free)
+	if includePaid {
+		appendEntry(c.ClinePass)
+		appendEntry(c.ClineCloud)
+	}
+	return out
+}
+
+// ParseRecommendedModels parses the curated feed, tolerating key variants the
+// service may emit (clinePass/cline-pass/cline_pass and clineCloud/cline-cloud
+// /cline_cloud shapes) while keeping every entry's own metadata intact.
+func ParseRecommendedModels(raw []byte) (*ClineRecommendedCatalog, error) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return nil, fmt.Errorf("empty body")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	pick := func(names ...string) []ClineModelInfo {
+		for _, name := range names {
+			arr, isArr := payload[name].([]any)
+			if !isArr {
+				continue
+			}
+			return normalizeClineModelEntries(arr)
+		}
+		return nil
+	}
+	return &ClineRecommendedCatalog{
+		Recommended: pick("recommended"),
+		Free:        pick("free"),
+		ClinePass:   pick("clinePass", "cline-pass", "cline_pass"),
+		ClineCloud:  pick("clineCloud", "cline-cloud", "cline_cloud"),
+	}, nil
+}
+
+// FetchRecommendedModels hits the curated-feed endpoint the official client
+// uses for its model picker (ai/cline/recommended-models), with the account
+// Bearer and the client identification headers.
+func (a *ClineAuth) FetchRecommendedModels(ctx context.Context, accessToken string) (*ClineRecommendedCatalog, error) {
+	accessToken = strings.TrimSpace(accessToken)
+	if accessToken == "" {
+		return nil, fmt.Errorf("cline models: access token is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	endpoint := strings.TrimSuffix(a.apiBaseURL, "/") + "/ai/cline/recommended-models"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("cline recommended models: create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+	ApplyClientHeaders(req, nil)
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("cline recommended models request failed: %w", err)
+	}
+	defer func() {
+		if errClose := resp.Body.Close(); errClose != nil {
+			log.Errorf("cline recommended models: close response body error: %v", errClose)
+		}
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("cline recommended models: read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("cline recommended models request failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	catalog, errParse := ParseRecommendedModels(body)
+	if errParse != nil {
+		return nil, fmt.Errorf("cline recommended models: parse response: %w", errParse)
+	}
+	return catalog, nil
+}
+
 // ParseClineModels parses the Cline models response defensively. Observed shapes:
 //   - bare array: [{"id":"...","name":"...","description":"...","tags":[...]}, ...]
 //   - envelope: {"success":true,"data":[...]}

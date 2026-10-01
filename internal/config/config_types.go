@@ -828,6 +828,17 @@ type ClineKey = ClaudeKey
 // ClineModel uses the Claude model mapping structure for Cline models.
 type ClineModel = ClaudeModel
 
+// ClineConfig tunes the Cline account backend behavior shared across
+// credentials (catalog/discovery tuning, not OAuth login).
+type ClineConfig struct {
+	// IncludePaidTiers extends the detected/recommended catalog with the
+	// subscription-gated families (clinePass + clineCloud). Default false:
+	// OAuth credentials keep only the recommended + free tiers (the paid ones
+	// only answer today's third-party block response). api-keys.cline
+	// credentials (subscription keys) always see all tiers regardless.
+	IncludePaidTiers *bool `yaml:"include-paid-tiers,omitempty" json:"include-paid-tiers,omitempty"`
+}
+
 // GeminiKey represents the configuration for a Gemini API key,
 // including optional overrides for upstream base URL, proxy routing, and headers.
 type GeminiKey struct {

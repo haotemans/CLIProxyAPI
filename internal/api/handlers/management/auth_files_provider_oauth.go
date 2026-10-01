@@ -708,6 +708,9 @@ func (h *Handler) RequestClineToken(c *gin.Context) {
 		// first-import path retries later.
 		if bundle != nil && bundle.ModelsDetected {
 			metadata[clineauth.ModelsMetadataKey] = bundle.Models
+			if len(bundle.Tiers) > 0 {
+				metadata["models_tiers"] = bundle.Tiers
+			}
 		}
 		if tokenStorage.Email != "" {
 			metadata["email"] = tokenStorage.Email

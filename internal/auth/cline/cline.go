@@ -88,6 +88,9 @@ type ClineAuth struct {
 	workosBaseURL   string
 	apiBaseURL      string
 	minPollInterval time.Duration
+	// includePaidTiers captures the cline.include-paid-tiers knob at
+	// construction so login bundles mirror the runtime catalog composition.
+	includePaidTiers bool
 }
 
 // NewClineAuth creates a Cline auth helper using config proxy settings.
@@ -118,10 +121,15 @@ func NewClineAuthWithProxyURLAndBaseURL(cfg *config.Config, proxyURL, apiBaseURL
 	if resolvedBase == "" {
 		resolvedBase = DefaultAPIBaseURL
 	}
+	includePaid := false
+	if cfg != nil && cfg.Cline.IncludePaidTiers != nil {
+		includePaid = *cfg.Cline.IncludePaidTiers
+	}
 	return &ClineAuth{
-		httpClient:    util.SetProxy(&sdkCfg, &http.Client{Timeout: defaultHTTPClientTimeout}),
-		workosBaseURL: workOSBaseURL,
-		apiBaseURL:    resolvedBase,
+		httpClient:       util.SetProxy(&sdkCfg, &http.Client{Timeout: defaultHTTPClientTimeout}),
+		workosBaseURL:    workOSBaseURL,
+		apiBaseURL:       resolvedBase,
+		includePaidTiers: includePaid,
 	}
 }
 
@@ -188,6 +196,9 @@ type ClineAuthBundle struct {
 	// token acquisition. Empty when detection failed or the account exposes no
 	// models; the presence of the metadata key (not the list) marks detection.
 	Models []ClineModelInfo
+	// Tiers carries the curated bucket markers {"recommended","free","paid"}
+	// for the detected catalog when the recommended feed answered.
+	Tiers map[string]int
 	// ModelsDetected reports whether model detection succeeded (possibly with
 	// an empty result for a model-less account). Distinguishes "detected-but-
 	// empty" from "detection failed", so callers only persist the marker on
@@ -275,11 +286,19 @@ func (a *ClineAuth) WaitForAuthorization(ctx context.Context, deviceCode *Device
 		TokenRecord: record,
 		LastRefresh: time.Now().UTC().Format(time.RFC3339),
 	}
-	// Fetch the per-account model catalog right after token acquisition.
+	// Fetch the curated per-account model catalog right after token
+	// acquisition (recommended feed first; the full catalog is the fallback).
 	// Detection failure must never fail the login; callers save tokens anyway.
+	catalog, errFeed := a.FetchRecommendedModels(ctx, record.AccessToken)
+	if errFeed == nil {
+		bundle.Models = catalog.Flat(a.includePaidTiers)
+		bundle.Tiers = catalog.TierCounts()
+		bundle.ModelsDetected = true
+		return bundle, nil
+	}
 	models, errModels := a.FetchAvailableModels(ctx, record.AccessToken)
 	if errModels != nil {
-		log.Warnf("cline: account model detection failed, saving credential without models: %v", errModels)
+		log.Warnf("cline: account model detection failed (feed %v, full %v), saving credential without models: %v", errFeed, errModels, errModels)
 	} else {
 		bundle.Models = models
 		bundle.ModelsDetected = true

@@ -116,6 +116,9 @@ func (a ClineAuthenticator) Login(ctx context.Context, cfg *config.Config, opts 
 	// failure the marker is left out so the lazy first-import path retries.
 	if authBundle != nil && authBundle.ModelsDetected {
 		metadata[cline.ModelsMetadataKey] = authBundle.Models
+		if len(authBundle.Tiers) > 0 {
+			metadata["models_tiers"] = authBundle.Tiers
+		}
 	}
 
 	fileName := cline.CredentialFileName(tokenStorage.Email, tokenStorage.Subject)

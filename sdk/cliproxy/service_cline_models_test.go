@@ -98,22 +98,34 @@ func TestClineModelsStaticFallbackUntilDetected(t *testing.T) {
 }
 
 // TestClineLazyModelDetectionOnce covers the first-import lazy path:
-// - an imported cline auth WITHOUT stored models triggers exactly one fetch;
-// - the fetched catalog is persisted into the auth file metadata;
+// - an imported cline auth WITHOUT stored models triggers exactly one curated
+//   feed fetch (the full catalog is not consulted when the feed works);
+// - the curated catalog is persisted into the auth file metadata (with the
+//   probe-friendly tier markers);
 // - re-registering from the persisted shape advertises only detected models;
 // - a follow-up update does not refetch (metadata key marks detection done).
 func TestClineLazyModelDetectionOnce(t *testing.T) {
-	var fetchCount atomic.Int32
+	var feedCount, fullCount atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/ai/cline/models" {
-			t.Errorf("unexpected upstream path %q", r.URL.Path)
-		}
 		if got := r.Header.Get("Authorization"); got != "Bearer tok" {
 			t.Errorf("Authorization = %q, want Bearer tok", got)
 		}
-		fetchCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"id":"moonshotai/kimi-k3","name":"kimi-k3"}]`))
+		switch r.URL.Path {
+		case "/api/v1/ai/cline/recommended-models":
+			feedCount.Add(1)
+			_, _ = w.Write([]byte(`{
+				"recommended": [{"id":"moonshotai/kimi-k3","name":"kimi-k3"}],
+				"free": [{"id":"cline-free/glm-5","name":"GLM 5 (Free)"}],
+				"clinePass": [{"id":"cline-pass/claude-sonnet-4-6","name":"sonnet pass"}]
+			}`))
+		case "/api/v1/ai/cline/models":
+			fullCount.Add(1)
+			_, _ = w.Write([]byte(`[{"id":"moonshotai/kimi-k3","name":"kimi-k3"}]`))
+		default:
+			t.Errorf("unexpected upstream path %q", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
 	}))
 	defer upstream.Close()
 
@@ -163,8 +175,11 @@ func TestClineLazyModelDetectionOnce(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if got := fetchCount.Load(); got != 1 {
-		t.Fatalf("models endpoint fetched %d times, want exactly 1", got)
+	if got := feedCount.Load(); got != 1 {
+		t.Fatalf("recommended feed fetched %d times, want exactly 1", got)
+	}
+	if got := fullCount.Load(); got != 0 {
+		t.Fatalf("full catalog fetched %d times, want 0 (curated feed answered)", got)
 	}
 
 	var meta map[string]any
@@ -172,8 +187,20 @@ func TestClineLazyModelDetectionOnce(t *testing.T) {
 		t.Fatalf("persisted auth file not valid JSON: %v", err)
 	}
 	persistedModels := clineauth.ModelsFromMetadata(meta)
-	if len(persistedModels) != 1 || persistedModels[0].ID != "moonshotai/kimi-k3" {
-		t.Fatalf("persisted detected models wrong: %+v", persistedModels)
+	if len(persistedModels) != 2 {
+		t.Fatalf("persisted curated catalog = %+v, want 2 (recommended+free, no paid tier for OAuth)", persistedModels)
+	}
+	ids := map[string]bool{}
+	for _, model := range persistedModels {
+		ids[model.ID] = true
+	}
+	if !ids["moonshotai/kimi-k3"] || !ids["cline-free/glm-5"] {
+		t.Fatalf("curated ids wrong: %+v", ids)
+	}
+	if tiersRaw, ok := meta["models_tiers"].(map[string]any); !ok {
+		t.Fatalf("models_tiers marker missing: %+v", meta)
+	} else if tiersRaw["paid"] != float64(1) {
+		t.Fatalf("tiers paid marker = %+v, want 1", tiersRaw)
 	}
 
 	// Simulate the watcher re-registering from the persisted file shape.
@@ -183,8 +210,8 @@ func TestClineLazyModelDetectionOnce(t *testing.T) {
 		Action: watcher.AuthUpdateActionModify, ID: authID, Auth: replayed,
 	}})
 	time.Sleep(200 * time.Millisecond)
-	if got := len(GlobalModelRegistry().GetModelsForClient(authID)); got != 1 {
-		t.Fatalf("after lazy detection + replay advertised %d models, want 1 (detected only)", got)
+	if got := len(GlobalModelRegistry().GetModelsForClient(authID)); got != 2 {
+		t.Fatalf("after lazy detection + replay advertised %d models, want 2 (curated only)", got)
 	}
 
 	// Marker present: further updates never fetch again.
@@ -192,7 +219,7 @@ func TestClineLazyModelDetectionOnce(t *testing.T) {
 		Action: watcher.AuthUpdateActionModify, ID: authID, Auth: replayed.Clone(),
 	}})
 	time.Sleep(200 * time.Millisecond)
-	if got := fetchCount.Load(); got != 1 {
-		t.Fatalf("models endpoint fetched %d times after marker present, want 1", got)
+	if got := feedCount.Load(); got != 1 {
+		t.Fatalf("recommended feed fetched %d times after marker present, want 1", got)
 	}
 }
