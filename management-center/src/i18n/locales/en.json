@@ -421,7 +421,9 @@
     "probe_failed": "Probe failed: {{message}}",
     "probe_pruned_detail": "Pruned: {{models}}",
     "probe_skipped": "Skipped: {{reason}}",
-    "probe_never_next": "Not probed yet · next ~{{in}}"
+    "probe_never_next": "Not probed yet · next ~{{in}}",
+    "probe_catalog": "catalog {{size}}",
+    "probe_provider_blocked_hint": "Cline is tightening third-party access (recurring phase)"
   },
   "antigravity_subscription": {
     "plan_unknown": "Unknown",

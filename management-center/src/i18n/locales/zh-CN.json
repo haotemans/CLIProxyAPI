@@ -419,7 +419,9 @@
     "probe_failed": "探测失败:{{message}}",
     "probe_pruned_detail": "已剔除:{{models}}",
     "probe_skipped": "已跳过:{{reason}}",
-    "probe_never_next": "尚未探测 · 下次 ~{{in}}"
+    "probe_never_next": "尚未探测 · 下次 ~{{in}}",
+    "probe_catalog": "目录 {{size}}",
+    "probe_provider_blocked_hint": "Cline 正在收紧第三方访问（周期性）"
   },
   "antigravity_subscription": {
     "plan_unknown": "未知",

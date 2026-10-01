@@ -424,7 +424,9 @@
     "probe_failed": "Ошибка проверки: {{message}}",
     "probe_pruned_detail": "Отсеяно: {{models}}",
     "probe_skipped": "Пропущено: {{reason}}",
-    "probe_never_next": "Еще не проверялось · след. ~{{in}}"
+    "probe_never_next": "Еще не проверялось · след. ~{{in}}",
+    "probe_catalog": "каталог {{size}}",
+    "probe_provider_blocked_hint": "Cline ужесточает сторонний доступ (периодически)"
   },
   "antigravity_subscription": {
     "plan_unknown": "Неизвестно",

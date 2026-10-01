@@ -11,6 +11,11 @@ export interface ModelProbeCredentialRow {
   checked_at?: string;
   usable?: number;
   pruned?: number;
+  /** Curated catalog size the last cycle probed (bucket-aware counter). */
+  catalog_size?: number;
+  /** Optional credential-level mark: 'provider_blocked' when the provider
+   * closes third-party access for the account tier (e.g. Cline block phase). */
+  status?: string;
   pruned_models?: string[];
   skip_reason?: string;
   skip_cycle?: number;

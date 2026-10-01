@@ -5,6 +5,7 @@ import {
   formatCheckedAt,
   formatRelativeFromNow,
   mergeProbeSummary,
+  probePresentation,
   PROBE_SUPPORTED_PROVIDERS,
   rowsToMap,
   splitProbeSummary,
@@ -148,5 +149,31 @@ describe('splitProbeSummary', () => {
     expect(usable?.text).toBe('0');
     expect(pruned?.text).toBe('0');
     expect(parts.some((part) => part.kind === 'text' && part.text.includes('usable'))).toBe(true);
+  });
+});
+
+describe('probePresentation', () => {
+  test('reads the blocked class and catalog size from a status row', () => {
+    expect(probePresentation({ status: 'provider_blocked', catalog_size: 10 })).toEqual({
+      blocked: true,
+      catalogSize: 10,
+    });
+    expect(probePresentation({ catalog_size: 4 })).toEqual({ blocked: false, catalogSize: 4 });
+    expect(probePresentation(undefined)).toEqual({ blocked: false, catalogSize: 0 });
+    expect(probePresentation({ catalog_size: 0 })).toEqual({ blocked: false, catalogSize: 0 });
+    expect(probePresentation({ status: 'auth_error', catalog_size: 3 })).toEqual({
+      blocked: false,
+      catalogSize: 3,
+    });
+  });
+
+  test('hint and catalog locale keys exist in every locale', () => {
+    for (const locale of ['en', 'zh-CN', 'zh-TW', 'ru']) {
+      const translations = JSON.parse(readFileSync(`src/i18n/locales/${locale}.json`, 'utf8'));
+      const hint = translations.auth_files.probe_provider_blocked_hint as string;
+      const catalogKey = translations.auth_files.probe_catalog as string;
+      expect(hint).toBeTruthy();
+      expect(catalogKey).toContain('{{size}}');
+    }
   });
 });

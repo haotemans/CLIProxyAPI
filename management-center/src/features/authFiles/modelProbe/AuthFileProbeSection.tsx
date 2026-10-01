@@ -7,6 +7,7 @@ import { modelProbeApi } from './api';
 import {
   formatCheckedAt,
   formatRelativeFromNow,
+  probePresentation,
   PROBE_SUPPORTED_PROVIDERS,
   splitProbeSummary,
   type ProbeSummaryPart,
@@ -58,6 +59,7 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
   const skipReason = row?.skip_reason?.trim();
   const usable = row?.usable ?? 0;
   const pruned = row?.pruned ?? 0;
+  const presentation = probePresentation(row);
 
   const handleProbe = async () => {
     setProbing(true);
@@ -94,7 +96,7 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
 
   return (
     <div className={styles.probeMeta}>
-      <span className={styles.probeDot} aria-hidden="true">
+      <span className={`${styles.probeDot} ${presentation.blocked ? styles.probeHintDot : ''}`} aria-hidden="true">
         {probed ? '✓' : '○'}
       </span>
       {probed ? (
@@ -115,6 +117,14 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
             ? t('auth_files.probe_never_next', { in: nextRunLabel })
             : t('auth_files.probe_never')}
         </span>
+      )}
+      {presentation.catalogSize > 0 && (
+        <span className={styles.probeCatalogMuted}>
+          {t('auth_files.probe_catalog', { size: presentation.catalogSize })}
+        </span>
+      )}
+      {presentation.blocked && (
+        <span className={styles.probeHintAmber}>{t('auth_files.probe_provider_blocked_hint')}</span>
       )}
       <button
         type="button"

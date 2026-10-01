@@ -64,6 +64,25 @@ export const formatCheckedAt = (iso: string | undefined): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+/** status class reported by the backend when the provider closes third-party access. */
+export const PROVIDER_BLOCKED_STATUS = 'provider_blocked';
+
+export interface ProbePresentation {
+  /** True when every recorded outcome is the provider-block phase (wait, no relogin). */
+  blocked: boolean;
+  /** Curated catalog size from the last probe cycle (0 when never recorded). */
+  catalogSize: number;
+}
+
+/** Reads the bucket-aware, block-aware presentation contract from a status row. */
+export const probePresentation = (row: { status?: string; catalog_size?: number } | undefined): ProbePresentation => ({
+  blocked: (row?.status ?? '').trim() === PROVIDER_BLOCKED_STATUS,
+  catalogSize:
+    typeof row?.catalog_size === 'number' && Number.isFinite(row.catalog_size) && row.catalog_size > 0
+      ? Math.trunc(row.catalog_size)
+      : 0,
+});
+
 /**
  * Relative "in ~X" label for the next scheduled probe (jitter-aware):
  * "~2h", "~9h", "~2d", or "soon" within the next minute.

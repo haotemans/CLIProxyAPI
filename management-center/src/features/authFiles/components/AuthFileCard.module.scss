@@ -623,3 +623,16 @@
   display: block;
   color: var(--text-quaternary);
 }
+
+.probeCatalogMuted {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.probeHintAmber {
+  color: var(--warning, #d99a5b);
+}
+
+.probeHintDot {
+  color: var(--warning, #d99a5b);
+}
