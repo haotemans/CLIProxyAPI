@@ -43,4 +43,4 @@ systemctl restart "$SERVICE"
 sleep 2
 systemctl is-active --quiet "$SERVICE"
 echo ">> OK: $(stat -c '%s bytes' "$BINARY"), service active"
-systemctl --no-pager -n3 -u "$SERVICE"
+journalctl -u "$SERVICE" --since '-10s' --no-pager | tail -3
