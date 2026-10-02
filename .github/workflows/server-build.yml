@@ -1,0 +1,98 @@
+name: server-build
+
+# Builds the linux/amd64 server binary on every push to main and publishes it
+# to the rolling prerelease "server-latest", so the tiny VPS never has to
+# compile Go itself. Pull URL on the server:
+#   https://github.com/<owner>/<repo>/releases/download/server-latest/cli-proxy-api-linux-amd64
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'sdk/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/server-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.26.4'
+  RELEASE_TAG: server-latest
+  ASSET_NAME: cli-proxy-api-linux-amd64
+
+jobs:
+  build-linux-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "VERSION=main.$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - name: Build with CGO in manylinux container
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm \
+            -v "$PWD:/src" \
+            -w /src \
+            -e GO_VERSION \
+            -e VERSION \
+            -e COMMIT \
+            -e BUILD_DATE \
+            quay.io/pypa/manylinux2014_x86_64 \
+            bash -euo pipefail -c '
+              go_archive="go${GO_VERSION}.linux-amd64.tar.gz"
+              curl -fsSL "https://go.dev/dl/${go_archive}" -o "/tmp/${go_archive}"
+              rm -rf /usr/local/go
+              tar -C /usr/local -xzf "/tmp/${go_archive}"
+              export PATH="/usr/local/go/bin:${PATH}"
+
+              CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -buildvcs=false \
+                -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILD_DATE}" \
+                -o dist/cli-proxy-api-linux-amd64 ./cmd/server/
+
+              glibc_versions="$(readelf --version-info dist/cli-proxy-api-linux-amd64 | sed -n "s/.*Name: GLIBC_\([0-9.]*\).*/\1/p" | sort -Vu)"
+              if [[ -n "${glibc_versions}" ]]; then
+                printf "GLIBC versions:\n%s\n" "${glibc_versions}"
+              fi
+            '
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-proxy-api-linux-amd64
+          path: dist/cli-proxy-api-linux-amd64
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Publish to rolling release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum cli-proxy-api-linux-amd64 > cli-proxy-api-linux-amd64.sha256)
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --prerelease \
+              --title "server-latest (rolling)" \
+              --notes "Rolling build of main. Updated by the server-build workflow."
+          fi
+          gh release upload "$RELEASE_TAG" \
+            dist/cli-proxy-api-linux-amd64 \
+            dist/cli-proxy-api-linux-amd64.sha256 \
+            --clobber
+          gh release edit "$RELEASE_TAG" \
+            --notes "Built from ${GITHUB_SHA} at ${BUILD_DATE} UTC by the server-build workflow."
