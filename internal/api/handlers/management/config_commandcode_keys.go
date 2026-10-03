@@ -71,9 +71,9 @@ func (h *Handler) PatchCommandcodeKey(c *gin.Context) {
 		RequestScopedErrors     *[]config.RequestScopedErrorRule `json:"request-scoped-errors"`
 	}
 	var body struct {
-		Index *int                   `json:"index"`
-		Match *string                `json:"match"`
-		Value *commandcodeKeyPatch   `json:"value"`
+		Index *int                 `json:"index"`
+		Match *string              `json:"match"`
+		Value *commandcodeKeyPatch `json:"value"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Value == nil {
 		c.JSON(400, gin.H{"error": "invalid body"})

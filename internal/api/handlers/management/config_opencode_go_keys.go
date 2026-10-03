@@ -71,9 +71,9 @@ func (h *Handler) PatchOpencodeGoKey(c *gin.Context) {
 		RequestScopedErrors     *[]config.RequestScopedErrorRule `json:"request-scoped-errors"`
 	}
 	var body struct {
-		Index *int                 `json:"index"`
-		Match *string              `json:"match"`
-		Value *opencodeGoKeyPatch  `json:"value"`
+		Index *int                `json:"index"`
+		Match *string             `json:"match"`
+		Value *opencodeGoKeyPatch `json:"value"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Value == nil {
 		c.JSON(400, gin.H{"error": "invalid body"})
