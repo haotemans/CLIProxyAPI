@@ -144,7 +144,13 @@ func ReadSection(metadata map[string]any) *Section {
 // probed outcome is not usable — a model re-probed usable re-enters the
 // catalog (self-healing), the marker stays as audit.
 func FilterPrunedForAuth(metadata map[string]any, models []*registry.ModelInfo) []*registry.ModelInfo {
-	section := ReadSection(metadata)
+	return FilterPrunedBySection(ReadSection(metadata), models)
+}
+
+// FilterPrunedBySection is the section-taking form of FilterPrunedForAuth,
+// for callers that resolve sections through SectionForAuth (config API-key
+// credentials carry their section in the live overlay, not the metadata).
+func FilterPrunedBySection(section *Section, models []*registry.ModelInfo) []*registry.ModelInfo {
 	if section == nil || (len(section.Pruned) == 0 && len(section.pruneRemoved()) == 0) {
 		return models
 	}

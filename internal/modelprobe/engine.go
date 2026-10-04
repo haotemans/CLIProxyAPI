@@ -196,7 +196,7 @@ func (e *Engine) CredentialCycle(ctx context.Context, auth *cliproxyauth.Auth, p
 	}
 	models = dedupeIDs(models)
 	if len(models) == 0 {
-		return ReadSection(auth.Metadata)
+		return SectionForAuth(auth)
 	}
 	catalogSize := len(models)
 	if cap := e.opts.MaxModelsPerCredentialPerCycle; cap > 0 && len(models) > cap {

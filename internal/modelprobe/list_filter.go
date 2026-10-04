@@ -7,8 +7,10 @@ import (
 )
 
 // HiddenModelIDs aggregates client-facing model-list visibility from every
-// credential's probe section. A model is hidden iff at least one probed
-// credential covers it (a PerModel row exists, or the credential sits in a
+// credential's probe section (auth metadata for file-backed credentials, the
+// process-local live overlay for config API-key credentials — see
+// SectionForAuth). A model is hidden iff at least one probed credential
+// covers it (a PerModel row exists, or the credential sits in a
 // provider-blocked phase hiding its whole set) AND no usable or recoverable
 // server path remains anywhere:
 //
@@ -29,7 +31,7 @@ func HiddenModelIDs(auths []*cliproxyauth.Auth) map[string]struct{} {
 		if auth == nil {
 			continue
 		}
-		section := ReadSection(auth.Metadata)
+		section := SectionForAuth(auth)
 		if section == nil || len(section.PerModel) == 0 {
 			continue
 		}

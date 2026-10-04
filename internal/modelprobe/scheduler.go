@@ -219,8 +219,20 @@ func (s *Scheduler) RunCycle(ctx context.Context) int {
 		s.mu.Unlock()
 	}()
 
+	auths := s.auths()
+	// Drop live-overlay entries for credentials that disappeared so the
+	// overlay stays bounded (list filtering only iterates current auths, so
+	// stale entries are otherwise harmless but leak memory).
+	keep := make(map[string]struct{}, len(auths))
+	for _, auth := range auths {
+		if auth != nil && strings.TrimSpace(auth.ID) != "" {
+			keep[auth.ID] = struct{}{}
+		}
+	}
+	pruneLiveSections(keep)
+
 	probed := 0
-	for _, auth := range s.auths() {
+	for _, auth := range auths {
 		if ctx.Err() != nil {
 			break
 		}
@@ -251,7 +263,7 @@ func (s *Scheduler) probeAuth(ctx context.Context, auth *cliproxyauth.Auth, cycl
 	if !s.engine.HasDriver(provider) {
 		return false
 	}
-	previous := ReadSection(auth.Metadata)
+	previous := SectionForAuth(auth)
 	if cycle%authErrorBackoffEvery != 0 {
 		if previous != nil && previous.IsProviderBlocked() {
 			// Same cadence as auth_error: don't hammer a provider mid-block-phase.
@@ -492,7 +504,7 @@ func (s *Scheduler) candidates(auth *cliproxyauth.Auth) []string {
 			return ids
 		}
 	}
-	if section := ReadSection(auth.Metadata); section != nil {
+	if section := SectionForAuth(auth); section != nil {
 		ids := make([]string, 0, len(section.PerModel))
 		for id := range section.PerModel {
 			ids = append(ids, id)
@@ -524,7 +536,7 @@ func (s *Scheduler) TriggerAuth(ctx context.Context, auth *cliproxyauth.Auth) *S
 	if s.store != nil {
 		s.store.ApplyOutcome(auth, section)
 	}
-	return ReadSection(auth.Metadata)
+	return SectionForAuth(auth)
 }
 
 // TriggerAuthAsync posts one credential's probe to the background queue.

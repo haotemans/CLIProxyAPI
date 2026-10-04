@@ -379,12 +379,14 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 	// provider_blocked (e.g. Cline's periodic third-party clampdown), the
 	// credential currently serves nothing and the whole set hides (routing
 	// skips it) while the probe section stays for recovery. Without any
-	// `model_probe` section the catalog passes through unchanged.
-	if probeSection := modelprobe.ReadSection(a.Metadata); probeSection != nil {
+	// `model_probe` section the catalog passes through unchanged. Sections
+	// resolve through SectionForAuth so config API-key credentials (no
+	// durable auth file) prune from the process-local live overlay too.
+	if probeSection := modelprobe.SectionForAuth(a); probeSection != nil {
 		if probeSection.IsProviderBlocked() {
 			models = nil
 		} else if len(probeSection.Pruned) > 0 {
-			models = modelprobe.FilterPrunedForAuth(a.Metadata, models)
+			models = modelprobe.FilterPrunedBySection(probeSection, models)
 		}
 	}
 	models = s.appendPluginModels(key, models)

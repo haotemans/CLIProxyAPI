@@ -17,15 +17,19 @@ type Store struct {
 	AuthDir string
 }
 
-// ApplyOutcome merges the cycle's Section into the credential metadata
-// (non-destructive across cycles: prior per-model rows for unchecked models
-// stay; newly usable models clear prior pruning), then best-effort writes
-// the auth file. Returns the merged Section.
+// ApplyOutcome merges the cycle's Section on top of the credential's current
+// state (non-destructive across cycles: prior per-model rows for unchecked
+// models stay; newly usable models clear prior pruning), mirrors the merged
+// Section into the in-process live overlay (the only carrier for credentials
+// without a file backend, e.g. config API keys), updates the credential
+// metadata, then best-effort writes the auth file. Returns the merged
+// Section.
 func (s *Store) ApplyOutcome(auth *cliproxyauth.Auth, section *Section) *Section {
 	if auth == nil || section == nil {
 		return section
 	}
-	merged := MergeSections(ReadSection(auth.Metadata), section)
+	merged := MergeSections(SectionForAuth(auth), section)
+	recordLiveSection(auth.ID, merged)
 	if auth.Metadata == nil {
 		auth.Metadata = map[string]any{}
 	}

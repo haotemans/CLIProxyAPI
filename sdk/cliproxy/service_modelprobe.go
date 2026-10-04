@@ -122,8 +122,9 @@ func (s *Service) maybeProbeNewAuth(ctx context.Context, auth *coreauth.Auth) {
 	if scheduler == nil || auth == nil || auth.Disabled {
 		return
 	}
-	if section := modelprobe.ReadSection(auth.Metadata); section != nil {
-		// Already probed once; interval cycles keep it fresh.
+	if section := modelprobe.SectionForAuth(auth); section != nil {
+		// Already probed once; interval cycles keep it fresh. Config API-key
+		// credentials resolve via the live overlay (no durable auth file).
 		return
 	}
 	scheduler.TriggerAuthAsync(ctx, auth)
