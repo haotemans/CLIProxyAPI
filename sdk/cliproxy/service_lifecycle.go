@@ -9,6 +9,7 @@ import (
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/api"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelprobe"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/redisqueue"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	sdkaccess "github.com/router-for-me/CLIProxyAPI/v8/sdk/access"
@@ -72,6 +73,16 @@ func (s *Service) Run(ctx context.Context) error {
 
 	s.applyRetryConfig(s.cfg)
 	s.configureCooldownStateStore(s.cfg)
+
+	// Client-facing model lists hide probe-dead models. The resolver reads the
+	// live auth metadata on every assembly (no caching in the registry), so
+	// provider_blocked revives and aggressive prunes show up immediately.
+	registry.SetProbeHiddenModelsResolver(func() map[string]struct{} {
+		if s.coreManager == nil {
+			return nil
+		}
+		return modelprobe.HiddenModelIDs(s.coreManager.List())
+	})
 
 	s.registerPluginAuthParser()
 	if s.coreManager != nil && !homeEnabled {

@@ -369,6 +369,10 @@ type ModelProbeConfig struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
 	// Interval is the probe interval in seconds. Default 21600 (6h).
 	Interval int `yaml:"interval" json:"interval"`
+	// RecheckInterval is the low-frequency tier cadence in seconds for models
+	// whose last outcome was usable, and the cap for per-model failure
+	// backoff (2^n * interval). Default 604800 (7 days).
+	RecheckInterval int `yaml:"recheck-interval" json:"recheck-interval"`
 	// MaxParallel bounds concurrent in-flight probes. Default 4.
 	MaxParallel int `yaml:"max-parallel" json:"max-parallel"`
 	// MaxModelsPerCredentialPerCycle caps per-credential probes per cycle

@@ -1247,6 +1247,71 @@ func (r *ModelRegistry) IsModelQuotaExceededForClient(clientID, modelID string) 
 	return exceeded
 }
 
+// probeHiddenModels holds the optional per-assembly probe-state filter for
+// client-facing model lists. The resolver is invoked on every assembly call
+// (never cached by the registry) so probe revives take effect immediately.
+var probeHiddenModels struct {
+	sync.RWMutex
+	resolve func() map[string]struct{}
+}
+
+// SetProbeHiddenModelsResolver installs (or clears, when nil) the resolver
+// returning model IDs that probe classification currently hides from
+// client-facing model lists (not_available everywhere, provider-blocked
+// credentials). Installed by the cliproxy service, which owns auth metadata.
+func SetProbeHiddenModelsResolver(fn func() map[string]struct{}) {
+	probeHiddenModels.Lock()
+	probeHiddenModels.resolve = fn
+	probeHiddenModels.Unlock()
+}
+
+func resolveProbeHiddenModelIDs() map[string]struct{} {
+	probeHiddenModels.RLock()
+	fn := probeHiddenModels.resolve
+	probeHiddenModels.RUnlock()
+	if fn == nil {
+		return nil
+	}
+	return fn()
+}
+
+func filterProbeHiddenModelMaps(models []map[string]any) []map[string]any {
+	hidden := resolveProbeHiddenModelIDs()
+	if len(hidden) == 0 {
+		return models
+	}
+	out := make([]map[string]any, 0, len(models))
+	for _, model := range models {
+		if model == nil {
+			continue
+		}
+		id, _ := model["id"].(string)
+		if _, ok := hidden[strings.ToLower(strings.TrimSpace(id))]; ok {
+			continue
+		}
+		out = append(out, model)
+	}
+	return out
+}
+
+func filterProbeHiddenModelInfos(models []*ModelInfo) []*ModelInfo {
+	hidden := resolveProbeHiddenModelIDs()
+	if len(hidden) == 0 {
+		return models
+	}
+	out := make([]*ModelInfo, 0, len(models))
+	for _, model := range models {
+		if model == nil {
+			continue
+		}
+		if _, ok := hidden[strings.ToLower(strings.TrimSpace(model.ID))]; ok {
+			continue
+		}
+		out = append(out, model)
+	}
+	return out
+}
+
 // GetAvailableModels returns all models that have at least one available client
 // Parameters:
 //   - handlerType: The handler type to filter models for (e.g., "openai", "claude", "gemini")
@@ -1260,7 +1325,7 @@ func (r *ModelRegistry) GetAvailableModels(handlerType string) []map[string]any 
 	if cache, ok := r.availableModelsCache[handlerType]; ok && (cache.expiresAt.IsZero() || now.Before(cache.expiresAt)) {
 		models := cloneModelMaps(cache.models)
 		r.mutex.RUnlock()
-		return models
+		return filterProbeHiddenModelMaps(models)
 	}
 	r.mutex.RUnlock()
 
@@ -1269,7 +1334,7 @@ func (r *ModelRegistry) GetAvailableModels(handlerType string) []map[string]any 
 	r.ensureAvailableModelsCacheLocked()
 
 	if cache, ok := r.availableModelsCache[handlerType]; ok && (cache.expiresAt.IsZero() || now.Before(cache.expiresAt)) {
-		return cloneModelMaps(cache.models)
+		return filterProbeHiddenModelMaps(cloneModelMaps(cache.models))
 	}
 
 	models, expiresAt := r.buildAvailableModelsLocked(handlerType, now)
@@ -1278,7 +1343,7 @@ func (r *ModelRegistry) GetAvailableModels(handlerType string) []map[string]any 
 		expiresAt: expiresAt,
 	}
 
-	return models
+	return filterProbeHiddenModelMaps(models)
 }
 
 func modelRegistrationAvailability(registration *ModelRegistration, now time.Time) (bool, time.Time) {
@@ -1346,7 +1411,7 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
 	sort.Slice(result, func(i, j int) bool {
 		return strings.TrimSpace(result[i].ID) < strings.TrimSpace(result[j].ID)
 	})
-	return result
+	return filterProbeHiddenModelInfos(result)
 }
 
 func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.Time) ([]map[string]any, time.Time) {

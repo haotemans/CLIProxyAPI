@@ -3,6 +3,7 @@ package modelprobe
 import (
 	"context"
 	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -34,10 +35,13 @@ type Scheduler struct {
 	auths   AuthsFunc
 	catalog CatalogFunc
 
-	interval   time.Duration
-	jitter     float64
-	jitterRand func() float64
-	newTimer   func(time.Duration) (<-chan time.Time, func())
+	interval time.Duration
+	// recheckInterval is the low-frequency tier cadence for known-alive
+	// models and the cap for per-model failure backoff.
+	recheckInterval time.Duration
+	jitter          float64
+	jitterRand      func() float64
+	newTimer        func(time.Duration) (<-chan time.Time, func())
 
 	mu          sync.Mutex
 	done        chan struct{}
@@ -54,6 +58,10 @@ type Scheduler struct {
 // SchedulerOptions tunes the scheduler.
 type SchedulerOptions struct {
 	Interval time.Duration
+	// RecheckInterval is the low-frequency re-probe cadence for models whose
+	// last outcome was usable, and the cap for per-model failure backoff.
+	// Default 7 days.
+	RecheckInterval time.Duration
 	// Jitter is the fraction of interval randomization. Nil means the 0.5
 	// default; a pointer to 0 restores an exact fixed cadence (detectable).
 	Jitter *float64
@@ -81,16 +89,21 @@ func NewScheduler(engine *Engine, store *Store, auths AuthsFunc, catalog Catalog
 	if jitterRand == nil {
 		jitterRand = rand.Float64
 	}
+	recheckInterval := opts.RecheckInterval
+	if recheckInterval <= 0 {
+		recheckInterval = defaultRecheckInterval
+	}
 	return &Scheduler{
-		engine:     engine,
-		store:      store,
-		auths:      auths,
-		catalog:    catalog,
-		interval:   opts.Interval,
-		jitter:     jitter,
-		jitterRand: jitterRand,
-		newTimer:   newTimer,
-		done:       make(chan struct{}),
+		engine:          engine,
+		store:           store,
+		auths:           auths,
+		catalog:         catalog,
+		interval:        opts.Interval,
+		recheckInterval: recheckInterval,
+		jitter:          jitter,
+		jitterRand:      jitterRand,
+		newTimer:        newTimer,
+		done:            make(chan struct{}),
 	}
 }
 
@@ -254,11 +267,20 @@ func (s *Scheduler) probeAuth(ctx context.Context, auth *cliproxyauth.Auth, cycl
 	if len(models) == 0 {
 		return false
 	}
-	models, skips := filterLimitedBackoff(models, previous, cycle)
+	// Two-tier scheduling: never-probed, revived (not_available rows re-entering
+	// the catalog) and overdue models probe now; known-alive rows wait out the
+	// low-frequency recheck window, failed rows wait out 2^n backoff.
+	models, skips := s.filterDueCandidates(models, previous, s.engine.Now())
+	models, cycleSkips := filterLimitedBackoff(models, previous, cycle)
+	skips = mergeSkips(skips, cycleSkips)
+	if len(models) == 0 {
+		return false
+	}
 	section := s.engine.CredentialCycle(ctx, auth, provider, models)
 	if section == nil {
 		return false
 	}
+	ContinueFailureStreaks(previous, section)
 	if len(skips) > 0 {
 		section.Skips = skips
 	}
@@ -292,6 +314,123 @@ func filterLimitedBackoff(models []string, previous *Section, cycle uint64) ([]s
 			continue
 		}
 		out = append(out, id)
+	}
+	return out, skips
+}
+
+// defaultRecheckInterval is the low-frequency tier cadence for known-alive
+// models when no recheck-interval is configured.
+const defaultRecheckInterval = 7 * 24 * time.Hour
+
+// failureBackoff returns the delay before re-probing a model with `failures`
+// consecutive non-usable outcomes: 2^failures * interval, capped at the
+// recheck interval. failures <= 0 means the plain cycle interval.
+func failureBackoff(failures int, interval, recheck time.Duration) time.Duration {
+	if interval <= 0 {
+		interval = 6 * time.Hour
+	}
+	if recheck <= 0 {
+		recheck = defaultRecheckInterval
+	}
+	delay := interval
+	for i := 0; i < failures && delay < recheck; i++ {
+		if delay > recheck/2 {
+			delay = recheck
+			break
+		}
+		delay *= 2
+	}
+	if delay > recheck {
+		delay = recheck
+	}
+	return delay
+}
+
+// ContinueFailureStreaks stamps fresh outcomes with the consecutive-failure
+// streak continued from the previous section: usable resets to zero, limited
+// preserves without growing, every other non-usable outcome increments.
+// Called by the scheduler (and manual runs) before merging, so the persisted
+// section carries the backoff state the next cycle reads.
+func ContinueFailureStreaks(previous, fresh *Section) {
+	if fresh == nil {
+		return
+	}
+	var previousRows map[string]*ModelOutcome
+	if previous != nil {
+		previousRows = previous.PerModel
+	}
+	for id, outcome := range fresh.PerModel {
+		if outcome == nil {
+			continue
+		}
+		switch outcome.Status {
+		case StatusUsable:
+			outcome.Failures = 0
+		case StatusLimited:
+			if prev := previousRows[id]; prev != nil && prev.Failures > outcome.Failures {
+				outcome.Failures = prev.Failures
+			}
+		default:
+			streak := 1
+			if prev := previousRows[id]; prev != nil {
+				streak = prev.Failures + 1
+			}
+			outcome.Failures = streak
+		}
+	}
+}
+
+// filterDueCandidates applies the two-tier cadence before a scheduled cycle:
+//   - never probed (no row) or revived (not_available row present in the
+//     catalog again): probe immediately
+//   - usable rows: probe only after the low-frequency recheck interval
+//   - limited rows: always due here (the per-cycle parity filter gates them)
+//   - every other non-usable row: probe only after 2^failures * interval,
+//     capped at the recheck interval
+//
+// Returns the due models and skip reasons keyed by model ID for the section.
+func (s *Scheduler) filterDueCandidates(models []string, previous *Section, now time.Time) ([]string, map[string]string) {
+	var previousRows map[string]*ModelOutcome
+	if previous != nil {
+		previousRows = previous.PerModel
+	}
+	out := make([]string, 0, len(models))
+	var skips map[string]string
+	skip := func(key, reason string) {
+		if skips == nil {
+			skips = map[string]string{}
+		}
+		skips[key] = reason
+	}
+	for _, id := range models {
+		key := strings.ToLower(strings.TrimSpace(id))
+		row := previousRows[key]
+		if row == nil {
+			out = append(out, id)
+			continue
+		}
+		checked := time.UnixMilli(row.CheckedMS)
+		switch row.Status {
+		case StatusUsable:
+			if now.Sub(checked) >= s.recheckInterval {
+				out = append(out, id)
+			} else {
+				skip(key, "usable recheck not due (every "+s.recheckInterval.String()+")")
+			}
+		case StatusNotAvailable:
+			// Model was pruned before and shows up in the catalog again: the
+			// revival check must not wait for any backoff window.
+			out = append(out, id)
+		case StatusLimited:
+			out = append(out, id)
+		default:
+			delay := failureBackoff(row.Failures, s.interval, s.recheckInterval)
+			if now.Sub(checked) >= delay {
+				out = append(out, id)
+			} else {
+				skip(key, "failure backoff ("+strconv.Itoa(row.Failures)+" consecutive, every "+delay.String()+")")
+			}
+		}
 	}
 	return out, skips
 }

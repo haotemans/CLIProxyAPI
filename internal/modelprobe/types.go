@@ -48,6 +48,10 @@ type ModelOutcome struct {
 	Error     string    `json:"error,omitempty"`
 	Checked   time.Time `json:"-"`
 	CheckedMS int64     `json:"checked_ms,omitempty"`
+	// Failures counts consecutive non-usable outcomes since the last usable
+	// probe (limited keeps the streak without growing it). The scheduler uses
+	// it for per-model exponential backoff; manual runs don't reset it.
+	Failures int `json:"failures,omitempty"`
 }
 
 // Section persists probe results into the credential metadata file.

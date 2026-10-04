@@ -1028,9 +1028,17 @@ upstream:
 # random 3-12s between individual probes, `limited` models are probed at most
 # every 2nd cycle, and auth_error-flagged credentials every 4th. Longer
 # intervals (24h recommended) are stealthier; shorter ones are detectable.
+# Two-tier cadence: models that probed usable last time are re-checked at the
+# low-frequency recheck-interval (default 7 days), while models never probed,
+# models re-entering the catalog after a prune (not_available revival), and
+# brand-new catalog entries probe immediately at the next cycle. Consecutive
+# real failures (anything but limited/busy) back off per model at 2^n *
+# interval, capped at recheck-interval. Manual runs (model-probe/run) always
+# probe the full catalog immediately; tiers only shape scheduled cycles.
 # model-probe:
 #   enabled: false                  # default off (safe); probes contact upstreams
 #   interval: 86400                 # cycle interval in seconds (24h recommended; default 6h when unset)
+#   recheck-interval: 604800        # known-alive low-frequency re-probe tier + failure-backoff cap, seconds (default 7d when unset)
 #   jitter: 0.5                     # next-start randomization fraction 0-1 (0 = exact fixed cadence = detectable)
 #   probe-spacing: "3s-12s"         # random sleep range before each probe
 #   max-parallel: 4                 # concurrent in-flight probes

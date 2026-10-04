@@ -232,12 +232,13 @@ func TestSchedulerLimitedBackoffSkipsOddCycles(t *testing.T) {
 		t.Fatalf("odd cycle probes = %v", mock.calls)
 	}
 
-	// Even cycle (2): busy-model re-enters.
+	// Even cycle (2): busy-model re-enters; ok-model was just probed in cycle 1
+	// and stays gated by the usable-recheck tier window.
 	if probed := scheduler.probeAuth(context.Background(), auth, 2); !probed {
 		t.Fatal("even cycle must probe")
 	}
-	if len(mock.calls) != 3 {
-		t.Fatalf("even cycle probes = %v", mock.calls)
+	if len(mock.calls) != 2 || mock.calls[1] != "busy-model" {
+		t.Fatalf("even cycle probes = %v, want [ok-model busy-model]", mock.calls)
 	}
 }
 

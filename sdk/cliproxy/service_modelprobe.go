@@ -57,8 +57,9 @@ func (s *Service) ensureModelProbeScheduler(ctx context.Context) {
 		s.modelProbeAuths,
 		s.modelProbeCatalog,
 		modelprobe.SchedulerOptions{
-			Interval: s.modelProbeInterval(),
-			Jitter:   s.cfg.ModelProbe.Jitter,
+			Interval:        s.modelProbeInterval(),
+			RecheckInterval: s.modelProbeRecheckInterval(),
+			Jitter:          s.cfg.ModelProbe.Jitter,
 		},
 	)
 	s.modelProbe = scheduler
@@ -96,6 +97,17 @@ func (s *Service) modelProbeInterval() time.Duration {
 		return time.Duration(s.cfg.ModelProbe.Interval) * time.Second
 	}
 	return modelProbeDefaultInterval
+}
+
+// modelProbeDefaultRecheckInterval is the fallback low-frequency tier cadence
+// and backoff cap (7 days).
+const modelProbeDefaultRecheckInterval = 7 * 24 * time.Hour
+
+func (s *Service) modelProbeRecheckInterval() time.Duration {
+	if s != nil && s.cfg != nil && s.cfg.ModelProbe.RecheckInterval > 0 {
+		return time.Duration(s.cfg.ModelProbe.RecheckInterval) * time.Second
+	}
+	return modelProbeDefaultRecheckInterval
 }
 
 // maybeProbeNewAuth runs a single fresh probe for one newly registered auth

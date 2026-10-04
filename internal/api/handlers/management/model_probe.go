@@ -221,6 +221,9 @@ func (h *Handler) inlineModelProbe(ctx context.Context, auth *cliproxyauth.Auth,
 	if section == nil {
 		return nil, fmt.Errorf("probe cycle skipped")
 	}
+	// Manual runs probe everything immediately (no two-tier gating) but the
+	// failure streak still continues so scheduled backoff stays coherent.
+	modelprobe.ContinueFailureStreaks(modelprobe.ReadSection(auth.Metadata), section)
 	if prune {
 		section.PruneRun = aggressivePruneRun(section)
 	}
