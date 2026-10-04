@@ -183,11 +183,6 @@ export function AuthFileProbeSection({ file, row, nextRunAt, onProbed }: AuthFil
       {skipReason && (
         <span className={styles.probeNoteMuted}>{t('auth_files.probe_skipped', { reason: skipReason })}</span>
       )}
-      {probed && pruned > 0 && row?.pruned_models?.length ? (
-        <span className={styles.probeNoteMuted}>
-          {t('auth_files.probe_pruned_detail', { models: row.pruned_models.join(', ') })}
-        </span>
-      ) : null}
     </div>
   );
 }
