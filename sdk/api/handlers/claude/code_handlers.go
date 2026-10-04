@@ -19,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	claudemodels "github.com/router-for-me/CLIProxyAPI/v8/internal/client/claude/models"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/clienterror"
 	. "github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
@@ -442,7 +443,9 @@ func claudeErrorDetailFromText(status int, errText string) (string, string) {
 		}
 	}
 
-	return errType, message
+	// The message is either raw upstream error text or a message extracted from a
+	// raw upstream error body; scrub account identifiers before it reaches the client.
+	return errType, clienterror.SanitizeDownstreamErrorText(message)
 }
 
 func claudeErrorTypeFromStatus(status int) string {

@@ -684,7 +684,7 @@ func formatAuthInfo(info UpstreamRequestLog) string {
 	default:
 		if authType != "" {
 			if authValue != "" {
-				parts = append(parts, fmt.Sprintf("type=%s value=%s", authType, authValue))
+				parts = append(parts, fmt.Sprintf("type=%s value=%s", authType, util.HideAPIKey(authValue)))
 			} else {
 				parts = append(parts, fmt.Sprintf("type=%s", authType))
 			}

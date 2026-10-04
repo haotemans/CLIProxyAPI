@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/clienterror"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
@@ -71,6 +72,11 @@ func BuildErrorResponseBody(status int, errText string) []byte {
 // BuildErrorResponseBodyWithError builds an OpenAI-compatible JSON error response body,
 // preserving structured classifications (such as terminal upstream auth failures and retryable flags)
 // present in err.
+//
+// Everything returned from here crosses the downstream boundary, so upstream
+// error material (raw JSON bodies or free-form text) passes through
+// clienterror sanitization to strip account identifiers and credentials.
+// Server-side logs recorded earlier in the chain stay untouched.
 func BuildErrorResponseBodyWithError(status int, errText string, err error) []byte {
 	if status <= 0 {
 		status = http.StatusInternalServerError
@@ -95,6 +101,7 @@ func BuildErrorResponseBodyWithError(status int, errText string, err error) []by
 				}
 			}
 		}
+		message = clienterror.SanitizeDownstreamErrorText(message)
 		r := false
 		payload, errMarshal := json.Marshal(ErrorResponse{
 			Error: ErrorDetail{
@@ -111,8 +118,9 @@ func BuildErrorResponseBodyWithError(status int, errText string, err error) []by
 	}
 
 	if trimmed != "" && json.Valid([]byte(trimmed)) {
-		return []byte(trimmed)
+		return clienterror.SanitizeDownstreamErrorBody([]byte(trimmed))
 	}
+	errText = clienterror.SanitizeDownstreamErrorText(errText)
 
 	errType := "invalid_request_error"
 	var code string

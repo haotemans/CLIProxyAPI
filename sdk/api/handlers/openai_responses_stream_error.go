@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/clienterror"
 )
 
 type openAIResponsesStreamErrorChunk struct {
@@ -153,17 +155,27 @@ func BuildOpenAIResponsesStreamErrorChunk(status int, errText string, sequenceNu
 	return []byte(`{"type":"error","error":{"type":"server_error","code":"internal_server_error","message":"internal error","param":null},"sequence_number":0}`)
 }
 
+// sanitizeStreamErrorDetail redacts account identifiers and credentials from an
+// upstream error detail map before it is emitted as a Responses SSE error chunk.
+// The map-in/map-out shape is guaranteed by SanitizeDownstreamErrorValue.
+func sanitizeStreamErrorDetail(detail map[string]any) map[string]any {
+	if cleaned, ok := clienterror.SanitizeDownstreamErrorValue(detail).(map[string]any); ok {
+		return cleaned
+	}
+	return detail
+}
+
 func openAIResponsesStreamErrorDetail(status int, errText, code, message string) map[string]any {
 	var payload map[string]any
 	trimmed := strings.TrimSpace(errText)
 	if trimmed != "" && json.Valid([]byte(trimmed)) {
 		if errUnmarshal := unmarshalJSONWithNumber([]byte(trimmed), &payload); errUnmarshal == nil {
 			if errorDetail, ok := payload["error"].(map[string]any); ok {
-				return errorDetail
+				return sanitizeStreamErrorDetail(errorDetail)
 			}
 			if response, ok := payload["response"].(map[string]any); ok {
 				if errorDetail, ok := response["error"].(map[string]any); ok {
-					return errorDetail
+					return sanitizeStreamErrorDetail(errorDetail)
 				}
 			}
 			if m, ok := payload["message"].(string); ok && strings.TrimSpace(m) != "" {
@@ -194,7 +206,7 @@ func openAIResponsesStreamErrorDetail(status int, errText, code, message string)
 			detail["param"] = paramVal
 		}
 	}
-	return detail
+	return sanitizeStreamErrorDetail(detail)
 }
 
 func openAIResponsesStreamFailedErrorDetail(status int, errText, code, message string) map[string]any {

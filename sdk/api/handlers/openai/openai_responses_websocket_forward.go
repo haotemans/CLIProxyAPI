@@ -288,6 +288,10 @@ func writeResponsesWebsocketTerminalError(
 			_, _ = writer.closeWithoutError()
 			return nil, false, errBuild
 		}
+	} else {
+		// payload is a raw upstream error frame echoed to the downstream client;
+		// strip account identifiers and credentials from it first.
+		payload = clienterror.SanitizeDownstreamErrorBody(payload)
 	}
 
 	wrote, errClose := writer.closeWithPayload(payload)
@@ -614,7 +618,7 @@ func buildResponsesWebsocketErrorPayload(errMsg *interfaces.ErrorMessage) ([]byt
 				continue
 			}
 			headerPath := strings.ReplaceAll(strings.ReplaceAll(key, `\\`, `\\\\`), ".", `\\.`)
-			headers, errSet = sjson.SetBytes(headers, headerPath, values[0])
+			headers, errSet = sjson.SetBytes(headers, headerPath, clienterror.SanitizeDownstreamHeaderValue(key, values[0]))
 			if errSet != nil {
 				return nil, errSet
 			}
@@ -645,7 +649,7 @@ func buildResponsesWebsocketErrorPayload(errMsg *interfaces.ErrorMessage) ([]byt
 		if errSet != nil {
 			return nil, errSet
 		}
-		payload, errSet = sjson.SetBytes(payload, "error.message", errText)
+		payload, errSet = sjson.SetBytes(payload, "error.message", clienterror.SanitizeDownstreamErrorText(errText))
 		if errSet != nil {
 			return nil, errSet
 		}
