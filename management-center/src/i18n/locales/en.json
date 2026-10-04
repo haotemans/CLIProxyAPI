@@ -107,7 +107,8 @@
     "config_management": "Config Panel",
     "logs": "Logs Viewer",
     "system_info": "Management Center Info",
-    "usage_stats": "Usage statistics"
+    "usage_stats": "Usage statistics",
+    "distribution": "Distribution Keys"
   },
   "nav_groups": {
     "operate": "Operate",
@@ -128,7 +129,8 @@
     "logs": "Request tracing",
     "config_management": "Gateway configuration",
     "system_info": "Runtime & diagnostics",
-    "usage_stats": "Tokens & cost analytics"
+    "usage_stats": "Tokens & cost analytics",
+    "distribution": "Issued client API keys"
   },
   "dashboard": {
     "hero_verdict_good": "All systems steady",
@@ -2036,5 +2038,52 @@
     "empty_data": "No quota data yet.",
     "missing_auth_index": "Credential index is missing.",
     "request_failed": "Failed to fetch Mirasim quota (status {{status}})."
+  },
+  "distribution": {
+    "title": "Distribution keys",
+    "subtitle": "Issue client API keys with model whitelist and USD quota. Master keys in api-keys stay unrestricted.",
+    "create": "New key",
+    "create_title": "New distribution key",
+    "edit_title": "Edit distribution key",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "reset_usage": "Reset usage",
+    "updated": "Key updated",
+    "deleted": "Key deleted",
+    "usage_reset": "Usage counters reset",
+    "empty_title": "No distribution keys yet",
+    "empty_desc": "Issue a key with model whitelist and quota for external clients.",
+    "status_active": "active",
+    "status_disabled": "disabled",
+    "status_expired": "expired",
+    "quota_progress": "{{spent}} / {{quota}} used",
+    "quota_unlimited": "{{spent}} spent · unlimited",
+    "models_all": "All models",
+    "models_limited": "{{count}} models allowed",
+    "expiry_never": "never expires",
+    "expiry_at": "expires {{at}}",
+    "last_request": "last request {{at}}",
+    "no_traffic": "no traffic yet",
+    "window_stats": "24h: {{requests}} req · {{cost}}",
+    "form_key": "Key value",
+    "form_key_placeholder": "leave empty to auto-generate dk-...",
+    "form_key_hint": "Returned only once at creation; later shown masked.",
+    "form_name": "Name",
+    "form_name_placeholder": "alice-laptop",
+    "form_enabled": "Enabled",
+    "form_expiry": "Expires at",
+    "form_expiry_hint": "Local time; empty = never expires.",
+    "form_models": "Allowed models",
+    "form_models_placeholder": "gpt-5\nclaude-sonnet-4-5",
+    "form_models_hint": "One model id per line (commas ok too); empty = all models.",
+    "form_quota": "Quota (USD)",
+    "form_quota_placeholder": "0 or empty = unlimited",
+    "form_quota_hint": "Cumulative spend cap by the pricing table; over-cap requests get 429.",
+    "form_error_expiry": "Expiry must be a valid future time (or empty).",
+    "form_error_quota": "Quota must be a number >= 0.",
+    "created_title": "Key created",
+    "created_hint": "This is the only time the full key is shown. Copy and store it safely.",
+    "copy_key": "Copy key"
   }
 }

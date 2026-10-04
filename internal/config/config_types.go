@@ -361,6 +361,29 @@ type UsageStatsConfig struct {
 	Pricing map[string]UsageStatsPrice `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 }
 
+// DistributionKey is one issued client key: every request authenticated with
+// it carries its own model whitelist and USD quota. Strings in access.api-keys
+// are untouched master keys (unrestricted).
+type DistributionKey struct {
+	// Key is the secret value (dk- prefixed when minted through the management
+	// API). Empty entries are dropped on sanitize; leading/trailing whitespace
+	// is trimmed.
+	Key string `yaml:"key" json:"key"`
+	// Name is a human label ("alice-laptop", "vendor-b").
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	// Enabled toggles the key; nil/true means active, false rejects requests.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// ExpiresAt is an RFC3339 expiry instant; empty means never expires.
+	ExpiresAt string `yaml:"expires-at,omitempty" json:"expires-at,omitempty"`
+	// AllowedModels whitelists client-visible model ids (case-insensitive);
+	// empty allows every model.
+	AllowedModels []string `yaml:"allowed-models,omitempty" json:"allowed-models,omitempty"`
+	// QuotaUSD caps cumulative spend against the pricing table; zero or
+	// negative means unlimited. The consumed portion lives in
+	// <auth-dir>/distribution-usage.json.
+	QuotaUSD float64 `yaml:"quota-usd,omitempty" json:"quota-usd,omitempty"`
+}
+
 // ModelProbeConfig controls per-credential model capability probing.
 // See internal/modelprobe for the engine semantics; cost note: each cycle
 // fires one tiny real request per advertised model per credential.

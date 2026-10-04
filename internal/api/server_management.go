@@ -109,6 +109,12 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.POST("/usage-meters/pricing/sync-litellm", s.mgmt.SyncUsageMetersPricing)
 		mgmt.GET("/model-probe/status", s.mgmt.GetModelProbeStatus)
 		mgmt.POST("/model-probe/run", s.mgmt.PostModelProbeRun)
+		mgmt.GET("/distribution-keys", s.mgmt.GetDistributionKeys)
+		mgmt.POST("/distribution-keys", s.mgmt.PostDistributionKey)
+		mgmt.PUT("/distribution-keys", s.mgmt.PutDistributionKey)
+		mgmt.DELETE("/distribution-keys", s.mgmt.DeleteDistributionKey)
+		mgmt.POST("/distribution-keys/reset-usage", s.mgmt.PostDistributionKeyResetUsage)
+		mgmt.GET("/distribution-keys/usage", s.mgmt.GetDistributionKeysUsage)
 		mgmt.GET("/pool-inspection", s.mgmt.GetPoolInspection)
 
 		mgmt.GET("/gemini-api-key", s.mgmt.GetGeminiKeys)

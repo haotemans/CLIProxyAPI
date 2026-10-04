@@ -629,3 +629,43 @@ func NormalizeOAuthExcludedModels(entries map[string][]string) map[string][]stri
 	}
 	return out
 }
+
+// SanitizeDistributionKeys normalizes issued distribution keys: values and
+// optional fields trimmed, model whitelist case-folded/deduped, duplicate key
+// values collapsed (first wins), entries without a key dropped.
+func (cfg *Config) SanitizeDistributionKeys() {
+	if cfg == nil || len(cfg.DistributionKeys) == 0 {
+		return
+	}
+	out := make([]DistributionKey, 0, len(cfg.DistributionKeys))
+	seen := make(map[string]struct{}, len(cfg.DistributionKeys))
+	for i := range cfg.DistributionKeys {
+		e := cfg.DistributionKeys[i]
+		e.Key = strings.TrimSpace(e.Key)
+		e.Name = strings.TrimSpace(e.Name)
+		e.ExpiresAt = strings.TrimSpace(e.ExpiresAt)
+		if e.Key == "" {
+			continue
+		}
+		if _, dup := seen[e.Key]; dup {
+			continue
+		}
+		seen[e.Key] = struct{}{}
+		models := make([]string, 0, len(e.AllowedModels))
+		seenModels := make(map[string]struct{}, len(e.AllowedModels))
+		for _, raw := range e.AllowedModels {
+			model := strings.ToLower(strings.TrimSpace(raw))
+			if model == "" {
+				continue
+			}
+			if _, exists := seenModels[model]; exists {
+				continue
+			}
+			seenModels[model] = struct{}{}
+			models = append(models, model)
+		}
+		e.AllowedModels = models
+		out = append(out, e)
+	}
+	cfg.DistributionKeys = out
+}

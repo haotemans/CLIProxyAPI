@@ -31,6 +31,7 @@ import {
   IconSidebarSystem,
   IconChevronDown,
   IconDollarSign,
+  IconKey,
 } from '@/components/ui/icons';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
 import {
@@ -62,6 +63,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   oauth: <IconSidebarOauth size={18} />,
   quota: <IconSidebarQuota size={18} />,
   usageStats: <IconDollarSign size={18} />,
+  distribution: <IconKey size={18} />,
   plugins: <IconSidebarPlugins size={18} />,
   pluginStore: <IconSidebarStore size={18} />,
   config: <IconSidebarConfig size={18} />,
@@ -634,6 +636,12 @@ export function MainLayout() {
           labelKey: 'nav.oauth',
           metaKey: 'nav_meta.oauth',
           icon: sidebarIcons.oauth,
+        },
+        {
+          path: '/distribution',
+          labelKey: 'nav.distribution',
+          metaKey: 'nav_meta.distribution',
+          icon: sidebarIcons.distribution,
         },
         ...(isApiKeyFunConfigured ? [quickStartNavItem] : []),
       ],

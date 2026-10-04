@@ -12,6 +12,7 @@ import (
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/api"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/distribution"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/usagestats"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy"
@@ -36,6 +37,7 @@ func StartServiceWithPluginHost(cfg *config.Config, configPath string, localPass
 		usagestats.ApplyReload(reloaded)
 	}))
 	stopUsageStats := startUsageStats(cfg)
+	startDistributionUsage(cfg)
 	defer stopUsageStats()
 
 	builder := cliproxy.NewBuilder().
@@ -86,6 +88,7 @@ func StartServiceBackgroundWithPluginHost(cfg *config.Config, configPath string,
 		usagestats.ApplyReload(reloaded)
 	}))
 	stopUsageStats := startUsageStats(cfg)
+	startDistributionUsage(cfg)
 
 	builder := cliproxy.NewBuilder().
 		WithConfig(cfg).
@@ -127,6 +130,15 @@ func startUsageStats(cfg *config.Config) func() {
 		return func() {}
 	}
 	return stop
+}
+
+// startDistributionUsage boots the per-key quota store; failures leave quota
+// enforcement running against an empty (in-memory-only) ledger, so the server
+// still starts.
+func startDistributionUsage(cfg *config.Config) {
+	if _, err := distribution.Start(cfg); err != nil {
+		log.Errorf("distribution usage store failed to start (continuing without persistence): %v", err)
+	}
 }
 
 // WaitForCloudDeploy waits indefinitely for shutdown signals in cloud deploy mode

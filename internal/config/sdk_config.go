@@ -62,6 +62,12 @@ type SDKConfig struct {
 	// APIKeys is a list of keys for authenticating clients to this proxy server.
 	APIKeys []string `yaml:"api-keys" json:"api-keys"`
 
+	// DistributionKeys lists issued client keys with optional per-key model
+	// whitelist and USD quota (GET/POST/PUT/DELETE
+	// /v0/management/distribution-keys). Requests presenting a plain
+	// access.api-keys entry stay master keys with no whitelist or quota.
+	DistributionKeys []DistributionKey `yaml:"distribution-keys,omitempty" json:"distribution-keys,omitempty"`
+
 	// PassthroughHeaders controls whether upstream response headers are forwarded to downstream clients.
 	// Default is false (disabled).
 	PassthroughHeaders bool `yaml:"passthrough-headers" json:"passthrough-headers"`

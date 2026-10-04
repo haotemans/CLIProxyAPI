@@ -107,7 +107,8 @@
     "config_management": "設定面板",
     "logs": "記錄檢視",
     "system_info": "中心資訊",
-    "usage_stats": "用量統計"
+    "usage_stats": "用量統計",
+    "distribution": "分发金鑰"
   },
   "nav_groups": {
     "operate": "運行",
@@ -128,7 +129,8 @@
     "logs": "請求追蹤與排查",
     "config_management": "閘道基礎設定",
     "system_info": "運行與診斷資訊",
-    "usage_stats": "Tokens 與費用統計"
+    "usage_stats": "Tokens 與費用統計",
+    "distribution": "簽發給客戶端的 API 金鑰"
   },
   "dashboard": {
     "hero_verdict_good": "運行平穩",
@@ -2060,5 +2062,52 @@
     "empty_data": "尚無額度資料。",
     "missing_auth_index": "缺少憑證索引。",
     "request_failed": "取得 Mirasim 額度失敗(狀態 {{status}})。"
+  },
+  "distribution": {
+    "title": "分发金鑰",
+    "subtitle": "為客戶端簽發 API 金鑰，支援模型白名單與美元額度。api-keys 裡的 master 金鑰不受限制。",
+    "create": "新建金鑰",
+    "create_title": "新建分發金鑰",
+    "edit_title": "編輯分發金鑰",
+    "save": "儲存",
+    "edit": "編輯",
+    "delete": "刪除",
+    "reset_usage": "重置用量",
+    "updated": "金鑰已更新",
+    "deleted": "金鑰已刪除",
+    "usage_reset": "用量計數已重置",
+    "empty_title": "還沒有分發金鑰",
+    "empty_desc": "為外部客戶端簽發帶模型白名單與額度的金鑰。",
+    "status_active": "啟用",
+    "status_disabled": "禁用",
+    "status_expired": "已過期",
+    "quota_progress": "已用 {{spent}} / {{quota}}",
+    "quota_unlimited": "已用 {{spent}} · 不限額",
+    "models_all": "全部模型",
+    "models_limited": "允許 {{count}} 個模型",
+    "expiry_never": "永不過期",
+    "expiry_at": "{{at}} 過期",
+    "last_request": "最近請求 {{at}}",
+    "no_traffic": "暫無流量",
+    "window_stats": "24 小時：{{requests}} 次 · {{cost}}",
+    "form_key": "金鑰值",
+    "form_key_placeholder": "留空自動產生 dk-...",
+    "form_key_hint": "完整金鑰僅建立時回傳一次，之後只顯示遮罩。",
+    "form_name": "備註名",
+    "form_name_placeholder": "alice-筆記本",
+    "form_enabled": "啟用",
+    "form_expiry": "過期時間",
+    "form_expiry_hint": "本地時間；留空 = 永不過期。",
+    "form_models": "允許模型",
+    "form_models_placeholder": "gpt-5\nclaude-sonnet-4-5",
+    "form_models_hint": "每行一個模型 id（也可用逗號）；留空 = 全部模型。",
+    "form_quota": "額度（美元）",
+    "form_quota_placeholder": "0 或留空 = 不限",
+    "form_quota_hint": "按定價表累計消耗，超限請求回傳 429。",
+    "form_error_expiry": "過期時間必須是有效的未來時間（或留空）。",
+    "form_error_quota": "額度必須是 ≥ 0 的數字。",
+    "created_title": "金鑰已建立",
+    "created_hint": "完整金鑰只顯示這一次，請立即複製並妥善保存。",
+    "copy_key": "複製金鑰"
   }
 }

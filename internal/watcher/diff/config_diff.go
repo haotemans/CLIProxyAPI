@@ -195,6 +195,34 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 	} else if !reflect.DeepEqual(trimStrings(oldCfg.APIKeys), trimStrings(newCfg.APIKeys)) {
 		changes = append(changes, "api-keys: values updated (count unchanged, redacted)")
 	}
+
+	// Distribution keys (key material never printed)
+	if len(oldCfg.DistributionKeys) != len(newCfg.DistributionKeys) {
+		changes = append(changes, fmt.Sprintf("distribution-keys count: %d -> %d", len(oldCfg.DistributionKeys), len(newCfg.DistributionKeys)))
+	} else {
+		for i := range oldCfg.DistributionKeys {
+			o := oldCfg.DistributionKeys[i]
+			n := newCfg.DistributionKeys[i]
+			if strings.TrimSpace(o.Key) != strings.TrimSpace(n.Key) {
+				changes = append(changes, fmt.Sprintf("distribution-keys[%d].key: updated", i))
+			}
+			if strings.TrimSpace(o.Name) != strings.TrimSpace(n.Name) {
+				changes = append(changes, fmt.Sprintf("distribution-keys[%d].name: %s -> %s", i, strings.TrimSpace(o.Name), strings.TrimSpace(n.Name)))
+			}
+			changes = appendOptionalBoolChange(changes, fmt.Sprintf("distribution-keys[%d].enabled", i), o.Enabled, n.Enabled)
+			if strings.TrimSpace(o.ExpiresAt) != strings.TrimSpace(n.ExpiresAt) {
+				changes = append(changes, fmt.Sprintf("distribution-keys[%d].expires-at: updated", i))
+			}
+			oldModels := strings.Join(o.AllowedModels, ",")
+			newModels := strings.Join(n.AllowedModels, ",")
+			if oldModels != newModels {
+				changes = append(changes, fmt.Sprintf("distribution-keys[%d].allowed-models: updated (%d -> %d entries)", i, len(o.AllowedModels), len(n.AllowedModels)))
+			}
+			if o.QuotaUSD != n.QuotaUSD {
+				changes = append(changes, fmt.Sprintf("distribution-keys[%d].quota-usd: %.2f -> %.2f", i, o.QuotaUSD, n.QuotaUSD))
+			}
+		}
+	}
 	if len(oldCfg.GeminiKey) != len(newCfg.GeminiKey) {
 		changes = append(changes, fmt.Sprintf("gemini-api-key count: %d -> %d", len(oldCfg.GeminiKey), len(newCfg.GeminiKey)))
 	} else {

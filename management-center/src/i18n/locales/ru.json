@@ -107,7 +107,8 @@
     "config_management": "Панель конфигурации",
     "logs": "Просмотр логов",
     "system_info": "Информация системы",
-    "usage_stats": "Статистика использования"
+    "usage_stats": "Статистика использования",
+    "distribution": "Ключи раздачи"
   },
   "nav_groups": {
     "operate": "Работа",
@@ -127,7 +128,8 @@
     "logs": "Трассировка запросов",
     "config_management": "Базовая конфигурация шлюза",
     "system_info": "Состояние и диагностика",
-    "usage_stats": "Статистика по токенам и стоимости"
+    "usage_stats": "Статистика по токенам и стоимости",
+    "distribution": "Выданные клиентские API-ключи"
   },
   "dashboard": {
     "hero_verdict_good": "Всё стабильно",
@@ -2030,5 +2032,52 @@
     "empty_data": "Данные о квотах пока отсутствуют.",
     "missing_auth_index": "Отсутствует индекс учетных данных.",
     "request_failed": "Не удалось получить квоту Mirasim (статус {{status}})."
+  },
+  "distribution": {
+    "title": "Ключи раздачи",
+    "subtitle": "Клиентские API-ключи с белым списком моделей и квотой в долларах. Мастер-ключи в api-keys без ограничений.",
+    "create": "Новый ключ",
+    "create_title": "Новый ключ раздачи",
+    "edit_title": "Изменить ключ раздачи",
+    "save": "Сохранить",
+    "edit": "Изменить",
+    "delete": "Удалить",
+    "reset_usage": "Сбросить расход",
+    "updated": "Ключ обновлён",
+    "deleted": "Ключ удалён",
+    "usage_reset": "Счётчики расхода сброшены",
+    "empty_title": "Ключей раздачи пока нет",
+    "empty_desc": "Выпустите ключ со списком моделей и квотой для внешних клиентов.",
+    "status_active": "активен",
+    "status_disabled": "отключён",
+    "status_expired": "истёк",
+    "quota_progress": "исп. {{spent}} / {{quota}}",
+    "quota_unlimited": "исп. {{spent}} · без лимита",
+    "models_all": "Все модели",
+    "models_limited": "разрешено {{count}} мод.",
+    "expiry_never": "бессрочно",
+    "expiry_at": "истекает {{at}}",
+    "last_request": "посл. запрос {{at}}",
+    "no_traffic": "трафика нет",
+    "window_stats": "24ч: {{requests}} запр. · {{cost}}",
+    "form_key": "Значение ключа",
+    "form_key_placeholder": "пусто — сгенерируется dk-...",
+    "form_key_hint": "Полное значение возвращается один раз при создании; дальше только маска.",
+    "form_name": "Название",
+    "form_name_placeholder": "alice-laptop",
+    "form_enabled": "Включён",
+    "form_expiry": "Истекает",
+    "form_expiry_hint": "Локальное время; пусто = бессрочно.",
+    "form_models": "Разрешённые модели",
+    "form_models_placeholder": "gpt-5\nclaude-sonnet-4-5",
+    "form_models_hint": "По одному id в строке (можно через запятую); пусто = все модели.",
+    "form_quota": "Квота (USD)",
+    "form_quota_placeholder": "0 или пусто = без лимита",
+    "form_quota_hint": "Накопленный расход по прайс-таблице; при превышении — 429.",
+    "form_error_expiry": "Дата истечения должна быть в будущем (или пусто).",
+    "form_error_quota": "Квота должна быть числом ≥ 0.",
+    "created_title": "Ключ создан",
+    "created_hint": "Полное значение показывается один раз. Скопируйте и сохраните его.",
+    "copy_key": "Скопировать ключ"
   }
 }

@@ -17,6 +17,15 @@ func Register(cfg *sdkconfig.SDKConfig) {
 	}
 
 	keys := normalizeKeys(cfg.APIKeys)
+	// Issued distribution keys authenticate through the same provider; their
+	// enabled/expiry/whitelist/quota lifecycle is enforced downstream by the
+	// distribution middleware (which can answer with OpenAI-style errors).
+	for _, entry := range cfg.DistributionKeys {
+		if value := strings.TrimSpace(entry.Key); value != "" {
+			keys = append(keys, value)
+		}
+	}
+	keys = normalizeKeys(keys)
 	if len(keys) == 0 {
 		sdkaccess.UnregisterProvider(sdkaccess.AccessProviderTypeConfigAPIKey)
 		return

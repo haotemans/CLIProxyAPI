@@ -411,19 +411,40 @@ func (h *Handler) persist(c *gin.Context) bool {
 // persistLocked saves the current in-memory config to disk.
 // It expects the caller to hold h.mu.
 func (h *Handler) persistLocked(c *gin.Context) bool {
-	// Preserve comments when writing
-	if err := config.SaveConfigPreserveComments(h.configFilePath, h.cfg, c.GetBool(ConfigV8ContextKey)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save config: %v", err)})
+	if !h.saveConfigLocked(c) {
 		return false
 	}
-	snapshot := h.reloadSnapshotConfigLocked()
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	var reqCtx context.Context
 	if c != nil && c.Request != nil {
 		reqCtx = c.Request.Context()
 	}
-	h.reloadConfigAfterManagementSaveAsync(reqCtx, snapshot)
+	h.reloadConfigAfterManagementSaveAsync(reqCtx, h.reloadSnapshotConfigLocked())
 	return true
+}
+
+// saveConfigLocked writes the config without answering the request, so
+// handlers that must return richer payloads (e.g. a one-time full key value
+// at creation) can schedule the reload themselves.
+// It expects the caller to hold h.mu.
+func (h *Handler) saveConfigLocked(c *gin.Context) bool {
+	// Preserve comments when writing
+	if err := config.SaveConfigPreserveComments(h.configFilePath, h.cfg, c.GetBool(ConfigV8ContextKey)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save config: %v", err)})
+		return false
+	}
+	return true
+}
+
+// scheduleReloadLocked mirrors persistLocked's async reload trigger with the
+// freshly captured snapshot. Callers hold h.mu during save; call this after
+// releasing it (the reload path acquires its own locks).
+func (h *Handler) scheduleReloadAfterSave(c *gin.Context, snapshot configReloadSnapshot) {
+	var reqCtx context.Context
+	if c != nil && c.Request != nil {
+		reqCtx = c.Request.Context()
+	}
+	h.reloadConfigAfterManagementSaveAsync(reqCtx, snapshot)
 }
 
 // Helper methods for simple types

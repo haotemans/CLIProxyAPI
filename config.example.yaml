@@ -89,6 +89,18 @@ access:
     - "your-api-key-2"
     - "your-api-key-3"
 
+# Distribution keys: issue scoped client keys with their own limits.
+# Entries here act like access.api-keys for authentication, plus per-key
+# restrictions. Manage them from the panel's 分发 page or the
+# /v0/management/distribution-keys API; editing by hand also works.
+# distribution-keys:
+#   - key: "dk-replace-me"             # required; minted automatically when created via the API
+#     name: "alice-laptop"             # optional label
+#     enabled: true                    # optional, default true
+#     expires-at: "2027-01-01T00:00:00Z"  # optional RFC3339; absent = never expires
+#     allowed-models: ["space-bunny-free"]  # optional; empty/absent = every model
+#     quota-usd: 10                    # optional USD spend cap; 0/absent = unlimited
+
 # Optional credential concurrency and observation contracts.
 
 # credentials:

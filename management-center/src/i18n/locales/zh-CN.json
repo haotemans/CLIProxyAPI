@@ -107,7 +107,8 @@
     "config_management": "配置面板",
     "logs": "日志查看",
     "system_info": "中心信息",
-    "usage_stats": "用量统计"
+    "usage_stats": "用量统计",
+    "distribution": "分发密钥"
   },
   "nav_groups": {
     "operate": "运行",
@@ -128,7 +129,8 @@
     "logs": "请求追踪与排查",
     "config_management": "网关基础配置",
     "system_info": "运行与诊断信息",
-    "usage_stats": "Tokens 与费用统计"
+    "usage_stats": "Tokens 与费用统计",
+    "distribution": "给客户端签发的 API 密钥"
   },
   "dashboard": {
     "hero_verdict_good": "运行平稳",
@@ -2034,5 +2036,52 @@
     "empty_data": "暂无额度数据。",
     "missing_auth_index": "缺少凭证索引。",
     "request_failed": "获取 Mirasim 额度失败(状态 {{status}})。"
+  },
+  "distribution": {
+    "title": "分发密钥",
+    "subtitle": "为客户端签发 API 密钥，支持模型白名单与美元额度。api-keys 里的 master 密钥不受限制。",
+    "create": "新建密钥",
+    "create_title": "新建分发密钥",
+    "edit_title": "编辑分发密钥",
+    "save": "保存",
+    "edit": "编辑",
+    "delete": "删除",
+    "reset_usage": "重置用量",
+    "updated": "密钥已更新",
+    "deleted": "密钥已删除",
+    "usage_reset": "用量计数已重置",
+    "empty_title": "还没有分发密钥",
+    "empty_desc": "为外部客户端签发带模型白名单与额度的密钥。",
+    "status_active": "启用",
+    "status_disabled": "禁用",
+    "status_expired": "已过期",
+    "quota_progress": "已用 {{spent}} / {{quota}}",
+    "quota_unlimited": "已用 {{spent}} · 不限额",
+    "models_all": "全部模型",
+    "models_limited": "允许 {{count}} 个模型",
+    "expiry_never": "永不过期",
+    "expiry_at": "{{at}} 过期",
+    "last_request": "最近请求 {{at}}",
+    "no_traffic": "暂无流量",
+    "window_stats": "24 小时：{{requests}} 次 · {{cost}}",
+    "form_key": "密钥值",
+    "form_key_placeholder": "留空自动生成 dk-...",
+    "form_key_hint": "完整密钥仅创建时返回一次，之后只显示掩码。",
+    "form_name": "备注名",
+    "form_name_placeholder": "alice-笔记本",
+    "form_enabled": "启用",
+    "form_expiry": "过期时间",
+    "form_expiry_hint": "本地时间；留空 = 永不过期。",
+    "form_models": "允许模型",
+    "form_models_placeholder": "gpt-5\nclaude-sonnet-4-5",
+    "form_models_hint": "每行一个模型 id（也可用逗号）；留空 = 全部模型。",
+    "form_quota": "额度（美元）",
+    "form_quota_placeholder": "0 或留空 = 不限",
+    "form_quota_hint": "按定价表累计消耗，超限请求返回 429。",
+    "form_error_expiry": "过期时间必须是有效的未来时间（或留空）。",
+    "form_error_quota": "额度必须是 ≥ 0 的数字。",
+    "created_title": "密钥已创建",
+    "created_hint": "完整密钥只显示这一次，请立即复制并妥善保存。",
+    "copy_key": "复制密钥"
   }
 }
