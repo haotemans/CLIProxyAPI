@@ -141,7 +141,7 @@ func (h *Handler) fetchMirasimQuota(parentCtx context.Context, auth *cliproxyaut
 		if err != nil {
 			return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("mirasim quota probe failed: %w", err)
 		}
-		return mapMirasimLimits(body), true, nil
+		return mapMirasimLimits(body, storage.Plan), true, nil
 	}
 
 	var apiKey, baseURL string
@@ -190,7 +190,7 @@ func (h *Handler) fetchMirasimQuota(parentCtx context.Context, auth *cliproxyaut
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("mirasim quota probe returned status %d: %s", resp.StatusCode, string(body))
 	}
-	return mapMirasimLimits(body), true, nil
+	return mapMirasimLimits(body, ""), true, nil
 }
 
 // isMirasimOAuthAuthFile reports whether the credential is a mirasim OAuth
@@ -212,6 +212,8 @@ func isMirasimOAuthAuthFile(auth *cliproxyauth.Auth) bool {
 }
 
 // mirasimLimitsPayload tolerates relay response variants for /v1/limits.
+// The vendor shape is the official client's: budget windows under "windows",
+// plus paid/degraded account markers; older variants kept for api-key relays.
 type mirasimLimitsPayload struct {
 	Plan              string                  `json:"plan"`
 	PlanType          string                  `json:"plan_type"`
@@ -227,10 +229,30 @@ type mirasimLimitsPayload struct {
 	NextReset         string                  `json:"next_reset"`
 	Summary           []pluginapi.QuotaMetric `json:"summary"`
 	Groups            []pluginapi.QuotaGroup  `json:"groups"`
+
+	Paid     *bool                 `json:"paid"`
+	Degraded bool                  `json:"degraded"`
+	Windows  []mirasimLimitsWindow `json:"windows"`
+}
+
+type mirasimLimitsWindow struct {
+	Name             string          `json:"name"`
+	Budget           *float64        `json:"budget"`
+	Used             *float64        `json:"used"`
+	UsedPercent      *float64        `json:"used_percent"`
+	RemainingPercent *float64        `json:"remaining_percent"`
+	ResetAt          json.RawMessage `json:"reset_at"`
+	ResetTime        string          `json:"reset_time"`
+	ModelScoped      bool            `json:"model_scoped"`
+	Status           string          `json:"status"`
 }
 
 // mapMirasimLimits converts the relay payload to the normalized response.
-func mapMirasimLimits(body []byte) pluginapi.QuotaFetchResponse {
+// plan is the credential's stored plan label (empty for api-key relays); when
+// the relay publishes no billed windows the answer still carries the plan and
+// an explicit marker bucket, so the panel can tell "plan has no billed quota"
+// from "fetch failed" — an empty {} never reads as blank again.
+func mapMirasimLimits(body []byte, plan string) pluginapi.QuotaFetchResponse {
 	resp := pluginapi.QuotaFetchResponse{}
 	var raw mirasimLimitsPayload
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -238,20 +260,31 @@ func mapMirasimLimits(body []byte) pluginapi.QuotaFetchResponse {
 		return resp
 	}
 
-	plan := strings.TrimSpace(raw.Plan)
-	if plan == "" {
-		plan = strings.TrimSpace(raw.PlanType)
+	resolvedPlan := strings.TrimSpace(plan)
+	if resolvedPlan == "" {
+		resolvedPlan = strings.TrimSpace(raw.Plan)
 	}
-	if plan == "" {
-		plan = strings.TrimSpace(raw.TierName)
+	if resolvedPlan == "" {
+		resolvedPlan = strings.TrimSpace(raw.PlanType)
 	}
-	if plan != "" {
-		resp.Subscription = &pluginapi.QuotaSubscription{Plan: plan}
+	if raw.Paid != nil {
+		resp.Subscription = &pluginapi.QuotaSubscription{Plan: resolvedPlan}
+		resp.Subscription.TierName = "free"
+		if *raw.Paid {
+			resp.Subscription.TierName = "paid"
+		}
+	} else if resolvedPlan != "" {
+		resp.Subscription = &pluginapi.QuotaSubscription{Plan: resolvedPlan}
 	}
 
 	resp.Summary = raw.Summary
 	if len(raw.Groups) > 0 {
 		resp.Groups = raw.Groups
+	}
+
+	informative := mapMirasimWindows(&resp, raw.Windows, raw.Degraded)
+	if informative {
+		return resp
 	}
 
 	limit := raw.Limit
@@ -288,7 +321,118 @@ func mapMirasimLimits(body []byte) pluginapi.QuotaFetchResponse {
 			}},
 		})
 	}
+	if len(resp.Groups) == 0 {
+		// The relay answered without any billed window (free-tier plans may
+		// legitimately report none): emit the explicit marker so the panel
+		// renders "no billed quota for plan X" instead of a blank card.
+		resp.Groups = append(resp.Groups, pluginapi.QuotaGroup{
+			DisplayName: "account limits",
+			Buckets: []pluginapi.QuotaBucket{{
+				Window:            "limits",
+				RemainingFraction: 1,
+				Description:       "no billed limits published for this plan",
+			}},
+		})
+	}
 	return resp
+}
+
+// mapMirasimWindows maps vendor budget windows: account windows into
+// "account limits", model-scoped windows into their own group so one
+// exhausted model never reads as an exhausted account. Returns false when no
+// window carried usable data.
+func mapMirasimWindows(resp *pluginapi.QuotaFetchResponse, windows []mirasimLimitsWindow, degraded bool) bool {
+	account := make([]pluginapi.QuotaBucket, 0, len(windows))
+	scoped := make([]pluginapi.QuotaBucket, 0, len(windows))
+	for _, window := range windows {
+		name := strings.TrimSpace(window.Name)
+		if name == "" || window.Budget == nil || window.Used == nil {
+			continue
+		}
+		bucket := mirasimWindowBucket(window, degraded)
+		if window.ModelScoped {
+			scoped = append(scoped, bucket)
+			continue
+		}
+		account = append(account, bucket)
+		if window.UsedPercent != nil {
+			resp.Summary = append(resp.Summary, pluginapi.QuotaMetric{
+				Key:    "used_" + name,
+				Label:  name + " used",
+				Value:  *window.UsedPercent,
+				Unit:   "%",
+				Format: "number",
+			})
+		} else if *window.Budget > 0 {
+			resp.Summary = append(resp.Summary, pluginapi.QuotaMetric{
+				Key:    "used_" + name,
+				Label:  name + " used",
+				Value:  *window.Used / *window.Budget * 100,
+				Unit:   "%",
+				Format: "number",
+			})
+		}
+	}
+	if len(account) > 0 {
+		resp.Groups = append(resp.Groups, pluginapi.QuotaGroup{DisplayName: "account limits", Buckets: account})
+	}
+	if len(scoped) > 0 {
+		resp.Groups = append(resp.Groups, pluginapi.QuotaGroup{DisplayName: "model limits", Buckets: scoped})
+	}
+	return len(account)+len(scoped) > 0
+}
+
+func mirasimWindowBucket(window mirasimLimitsWindow, degraded bool) pluginapi.QuotaBucket {
+	remaining := 1.0
+	if window.RemainingPercent != nil {
+		remaining = *window.RemainingPercent / 100
+	} else if window.Budget != nil && *window.Budget > 0 {
+		r := 1 - *window.Used/(*window.Budget)
+		if r < 0 {
+			r = 0
+		}
+		remaining = r
+	}
+	parts := make([]string, 0, 3)
+	if window.UsedPercent != nil {
+		parts = append(parts, fmt.Sprintf("%.1f%% used", *window.UsedPercent))
+	} else if window.Budget != nil {
+		parts = append(parts, fmt.Sprintf("%.1f / %.1f used", *window.Used, *window.Budget))
+	}
+	if status := strings.TrimSpace(window.Status); status != "" {
+		parts = append(parts, strings.ReplaceAll(status, "_", " "))
+	}
+	if degraded {
+		parts = append(parts, "service degraded")
+	}
+	bucket := pluginapi.QuotaBucket{
+		Window:            window.Name,
+		RemainingFraction: remaining,
+		Description:       strings.Join(parts, " · "),
+	}
+	if reset := mirasimWindowReset(window.ResetAt, window.ResetTime); reset != "" {
+		bucket.ResetTime = reset
+	}
+	return bucket
+}
+
+// mirasimWindowReset tolerates reset_at arriving as string or epoch seconds.
+func mirasimWindowReset(raw json.RawMessage, resetTime string) string {
+	if trimmed := strings.TrimSpace(resetTime); trimmed != "" {
+		return trimmed
+	}
+	if len(raw) == 0 {
+		return ""
+	}
+	text := strings.Trim(string(raw), `"`)
+	var seconds float64
+	if err := json.Unmarshal(raw, &seconds); err == nil && seconds > 0 {
+		return time.UnixMilli(int64(seconds * 1000)).UTC().Format(time.RFC3339)
+	}
+	if _, errParseTime := time.Parse(time.RFC3339, text); errParseTime == nil {
+		return text
+	}
+	return text
 }
 
 func chooseString(values ...string) string {

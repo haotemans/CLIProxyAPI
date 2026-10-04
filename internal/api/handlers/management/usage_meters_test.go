@@ -193,7 +193,7 @@ func TestNativeQuotaSupportTypes(t *testing.T) {
 
 func TestMapMirasimLimitsVariants(t *testing.T) {
 	full := []byte(`{"plan":"PRO","limit":100,"used":25,"reset_at":"2026-10-01T00:00:00Z"}`)
-	resp := mapMirasimLimits(full)
+	resp := mapMirasimLimits(full, "")
 	if resp.Subscription == nil || resp.Subscription.Plan != "PRO" {
 		t.Fatalf("plan mapping = %+v", resp.Subscription)
 	}
@@ -212,7 +212,7 @@ func TestMapMirasimLimitsVariants(t *testing.T) {
 	}
 
 	credits := []byte(`{"total_credits":50,"used_credits":10,"next_reset":"soon"}`)
-	resp2 := mapMirasimLimits(credits)
+	resp2 := mapMirasimLimits(credits, "")
 	if len(resp2.Groups) != 1 || resp2.Groups[0].Buckets[0].RemainingFraction != 0.8 {
 		t.Fatalf("credits variant = %+v", resp2)
 	}
@@ -221,13 +221,44 @@ func TestMapMirasimLimitsVariants(t *testing.T) {
 	}
 
 	fractionOnly := []byte(`{"remaining_fraction":0.3}`)
-	resp3 := mapMirasimLimits(fractionOnly)
+	resp3 := mapMirasimLimits(fractionOnly, "")
 	if len(resp3.Groups) != 1 || resp3.Groups[0].Buckets[0].RemainingFraction != 0.3 {
 		t.Fatalf("fraction variant = %+v", resp3)
 	}
 
-	if resp4 := mapMirasimLimits([]byte(`not json`)); len(resp4.Groups) != 0 {
+	if resp4 := mapMirasimLimits([]byte(`not json`), ""); len(resp4.Groups) != 0 {
 		t.Fatalf("invalid body must not create groups: %+v", resp4)
+	}
+
+	// Vendor lane: budget windows with paid marker (the official client's
+	// /v1/limits shape); model-scoped windows split into their own group.
+	vendor := []byte(`{"paid":false,"windows":[
+		{"name":"weekly","budget":100,"used":25,"reset_at":"2026-10-08T00:00:00Z"},
+		{"name":"claude-sonnet-4-6","budget":40,"used":40,"model_scoped":true,"status":"limit_reached"}
+	]}`)
+	respVendor := mapMirasimLimits(vendor, "go")
+	if respVendor.Subscription == nil || respVendor.Subscription.Plan != "go" || respVendor.Subscription.TierName != "free" {
+		t.Fatalf("vendor subscription = %+v", respVendor.Subscription)
+	}
+	if len(respVendor.Groups) != 2 {
+		t.Fatalf("vendor groups = %+v", respVendor.Groups)
+	}
+	accBucket := respVendor.Groups[0].Buckets[0]
+	if respVendor.Groups[0].DisplayName != "account limits" || accBucket.RemainingFraction != 0.75 || accBucket.ResetTime != "2026-10-08T00:00:00Z" {
+		t.Fatalf("account window bucket = %+v", accBucket)
+	}
+	modelBucket := respVendor.Groups[1].Buckets[0]
+	if respVendor.Groups[1].DisplayName != "model limits" || modelBucket.Window != "claude-sonnet-4-6" || modelBucket.RemainingFraction != 0 {
+		t.Fatalf("model window bucket = %+v", modelBucket)
+	}
+
+	// plan=go style empty relay answer: explicit marker instead of blank {}.
+	respEmpty := mapMirasimLimits([]byte(`{}`), "go")
+	if respEmpty.Subscription == nil || respEmpty.Subscription.Plan != "go" {
+		t.Fatalf("marker subscription = %+v", respEmpty.Subscription)
+	}
+	if len(respEmpty.Groups) != 1 || respEmpty.Groups[0].Buckets[0].Description == "" {
+		t.Fatalf("empty relay answer must carry an explicit marker bucket: %+v", respEmpty.Groups)
 	}
 }
 

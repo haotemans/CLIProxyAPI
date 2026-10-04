@@ -7,6 +7,7 @@ import (
 	"time"
 
 	clineauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/cline"
+	mirasimauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/mirasim"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelconfig"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelprobe"
@@ -127,8 +128,19 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 		}
 		models = applyExcludedModels(models, excluded)
 	case "mirasim":
-		// Mirasim relays speak the Anthropic Messages API and expose Claude model IDs.
+		// Mirasim relays speak the Anthropic Messages API. OAuth credentials
+		// advertise the relay-fetched account roster (per-credential; probes
+		// classify it) with the credential's last-good roster as fallback, and
+		// the static Claude catalog only when neither exists.
 		models = registry.GetClaudeModels()
+		if authKind != "apikey" {
+			if roster := s.mirasimRosterForAuth(ctx, a); len(roster) > 0 {
+				models = buildMirasimRosterModels(roster)
+				s.maybePersistMirasimRoster(ctx, a, roster)
+			} else if detected := mirasimauth.ModelsFromMetadata(a.Metadata); len(detected) > 0 {
+				models = buildMirasimRosterModels(detected)
+			}
+		}
 		if entry := s.resolveConfigMirasimKey(a); entry != nil {
 			if len(entry.Models) > 0 {
 				models = buildMirasimConfigModels(entry)

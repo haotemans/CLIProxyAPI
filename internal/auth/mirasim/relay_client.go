@@ -296,24 +296,28 @@ func (c *RelayClient) AccountID() string {
 	return AccessTokenAgentAccount(c.storage.AccessToken)
 }
 
+// quotaProbeHeader marks control calls that probe account limits (official
+// client behavior): the relay only serves /v1/limits when it is present.
+const quotaProbeHeader = "x-mirasim-probe"
+
 // FetchLimits performs the signed control-plane GET /v1/limits (quota lane).
+// The probe marker "usage" rides as a plain header — control requests are
+// signed with empty metadata — mirroring the official client.
 func (c *RelayClient) FetchLimits(ctx context.Context) ([]byte, error) {
-	return c.signedControlGet(ctx, limitsResource)
+	raw, _, err := c.signedControlGetWithHeaders(ctx, limitsResource, "usage")
+	return raw, err
 }
 
 // FetchModels performs the signed control-plane GET /v1/models.
 func (c *RelayClient) FetchModels(ctx context.Context) ([]byte, http.Header, error) {
-	return c.signedControlGetWithHeaders(ctx, modelsResource)
-}
-
-func (c *RelayClient) signedControlGet(ctx context.Context, resource string) ([]byte, error) {
-	raw, _, err := c.signedControlGetWithHeaders(ctx, resource)
-	return raw, err
+	return c.signedControlGetWithHeaders(ctx, modelsResource, "")
 }
 
 // signedControlGetWithHeaders issues one signed control-plane GET. Control
-// calls carry empty metadata and are not sealed.
-func (c *RelayClient) signedControlGetWithHeaders(ctx context.Context, resource string) ([]byte, http.Header, error) {
+// calls carry empty metadata and are not sealed. probeValue, when non-empty,
+// adds the plain x-mirasim-probe header the official client sends on the
+// limits lane (it is not part of the signed metadata).
+func (c *RelayClient) signedControlGetWithHeaders(ctx context.Context, resource, probeValue string) ([]byte, http.Header, error) {
 	credential, err := c.Credential(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -327,6 +331,9 @@ func (c *RelayClient) signedControlGetWithHeaders(ctx context.Context, resource 
 		return nil, nil, err
 	}
 	headers.Set("Accept", "application/json")
+	if probeValue != "" {
+		headers.Set(quotaProbeHeader, probeValue)
+	}
 
 	if ctx == nil {
 		ctx = context.Background()
