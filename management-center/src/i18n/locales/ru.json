@@ -336,6 +336,7 @@
     "filter_cline": "Cline",
     "filter_cursor": "Cursor",
     "filter_kiro": "Kiro",
+    "filter_mirasim": "Mirasim",
     "filter_devin": "Devin",
     "filter_antigravity": "Antigravity",
     "filter_xai": "xAI",
@@ -2025,13 +2026,23 @@
     "plan": "Тариф",
     "empty_data": "Данные о квотах пока отсутствуют.",
     "missing_auth_index": "Отсутствует индекс учетных данных.",
-    "request_failed": "Не удалось получить квоту Kiro (статус {{status}})."
+    "request_failed": "Не удалось получить квоту Kiro (статус {{status}}).",
+    "idle": "Не загружено. Нажмите \"Обновить квоту\".",
+    "loading": "Загрузка квоты...",
+    "load_failed": "Не удалось загрузить квоту: {{message}}",
+    "empty_title": "Файлы авторизации Kiro отсутствуют",
+    "empty_desc": "Войдите через Kiro, чтобы увидеть квоту."
   },
   "mirasim_quota": {
     "plan": "Тариф",
     "empty_data": "Данные о квотах пока отсутствуют.",
     "missing_auth_index": "Отсутствует индекс учетных данных.",
-    "request_failed": "Не удалось получить квоту Mirasim (статус {{status}})."
+    "request_failed": "Не удалось получить квоту Mirasim (статус {{status}}).",
+    "idle": "Не загружено. Нажмите \"Обновить квоту\".",
+    "loading": "Загрузка квоты...",
+    "load_failed": "Не удалось загрузить квоту: {{message}}",
+    "empty_title": "Файлы авторизации Mirasim отсутствуют",
+    "empty_desc": "Войдите через Mirasim, чтобы увидеть квоту."
   },
   "distribution": {
     "title": "Ключи раздачи",

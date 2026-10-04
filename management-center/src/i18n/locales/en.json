@@ -333,6 +333,7 @@
     "filter_cline": "Cline",
     "filter_cursor": "Cursor",
     "filter_kiro": "Kiro",
+    "filter_mirasim": "Mirasim",
     "filter_devin": "Devin",
     "filter_antigravity": "Antigravity",
     "filter_xai": "xAI",
@@ -2031,13 +2032,23 @@
     "plan": "Plan",
     "empty_data": "No quota data yet. Request a token refresh first.",
     "missing_auth_index": "Credential index is missing.",
-    "request_failed": "Failed to fetch Kiro quota (status {{status}})."
+    "request_failed": "Failed to fetch Kiro quota (status {{status}}).",
+    "idle": "Click to refresh quota",
+    "loading": "Loading quota...",
+    "load_failed": "Failed to load quota: {{message}}",
+    "empty_title": "No Kiro Auth Files",
+    "empty_desc": "Log in with Kiro to view quota."
   },
   "mirasim_quota": {
     "plan": "Plan",
     "empty_data": "No quota data yet.",
     "missing_auth_index": "Credential index is missing.",
-    "request_failed": "Failed to fetch Mirasim quota (status {{status}})."
+    "request_failed": "Failed to fetch Mirasim quota (status {{status}}).",
+    "idle": "Click to refresh quota",
+    "loading": "Loading quota...",
+    "load_failed": "Failed to load quota: {{message}}",
+    "empty_title": "No Mirasim Auth Files",
+    "empty_desc": "Log in with Mirasim to view quota."
   },
   "distribution": {
     "title": "Distribution keys",

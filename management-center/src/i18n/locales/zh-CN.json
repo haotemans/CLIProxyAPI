@@ -331,6 +331,7 @@
     "filter_cline": "Cline",
     "filter_cursor": "Cursor",
     "filter_kiro": "Kiro",
+    "filter_mirasim": "Mirasim",
     "filter_devin": "Devin",
     "filter_antigravity": "Antigravity",
     "filter_xai": "xAI",
@@ -2029,13 +2030,23 @@
     "plan": "套餐",
     "empty_data": "暂无额度数据。",
     "missing_auth_index": "缺少凭证索引。",
-    "request_failed": "获取 Kiro 额度失败(状态 {{status}})。"
+    "request_failed": "获取 Kiro 额度失败(状态 {{status}})。",
+    "idle": "点击此处刷新额度",
+    "loading": "正在加载额度...",
+    "load_failed": "额度获取失败：{{message}}",
+    "empty_title": "暂无 Kiro 认证",
+    "empty_desc": "完成 Kiro 登录后即可查看额度。"
   },
   "mirasim_quota": {
     "plan": "套餐",
     "empty_data": "暂无额度数据。",
     "missing_auth_index": "缺少凭证索引。",
-    "request_failed": "获取 Mirasim 额度失败(状态 {{status}})。"
+    "request_failed": "获取 Mirasim 额度失败(状态 {{status}})。",
+    "idle": "点击此处刷新额度",
+    "loading": "正在加载额度...",
+    "load_failed": "额度获取失败：{{message}}",
+    "empty_title": "暂无 Mirasim 认证",
+    "empty_desc": "完成 Mirasim 登录后即可查看额度。"
   },
   "distribution": {
     "title": "分发密钥",

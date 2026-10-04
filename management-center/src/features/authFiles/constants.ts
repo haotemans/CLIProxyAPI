@@ -84,6 +84,7 @@ export const AUTH_FILE_MANUAL_REFRESH_PROVIDERS = new Set([
   'claude',
   'codex',
   'kimi',
+  'mirasim',
   'xai',
 ]);
 
