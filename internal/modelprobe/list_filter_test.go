@@ -71,6 +71,31 @@ func TestHiddenModelIDsNeverProbedAndUnprobedCredentials(t *testing.T) {
 	}
 }
 
+func TestHiddenModelIDsMixedProviderBlockedRows(t *testing.T) {
+	// A credential in a partial clampdown records provider_blocked on some
+	// rows while older rows still carry stale recoverable states. Each
+	// provider_blocked row is unservable on its own even though the
+	// credential as a whole is not yet flagged blocked.
+	auth := authWithOutcomeRows("cline", map[string]Status{
+		"clamped-1": StatusProviderBlocked,
+		"clamped-2": StatusProviderBlocked,
+		"stale-1":   StatusAuthError, // older round, still classed recoverable
+		"busy-1":    StatusLimited,   // busy: kept visible
+		"alive-1":   StatusUsable,
+	})
+	hidden := HiddenModelIDs([]*cliproxyauth.Auth{auth})
+	for _, id := range []string{"clamped-1", "clamped-2"} {
+		if _, ok := hidden[id]; !ok {
+			t.Fatalf("provider_blocked row %s must hide: %v", id, idsOf(hidden))
+		}
+	}
+	for _, id := range []string{"stale-1", "busy-1", "alive-1"} {
+		if _, ok := hidden[id]; ok {
+			t.Fatalf("%s must stay visible: %v", id, idsOf(hidden))
+		}
+	}
+}
+
 func TestHiddenModelIDsProviderBlockedAndSalvage(t *testing.T) {
 	blockedRows := map[string]Status{"m-1": StatusProviderBlocked, "m-2": StatusProviderBlocked, "m-3": StatusProviderBlocked}
 	blocked := authWithOutcomeRows("cline", blockedRows)

@@ -15,6 +15,8 @@ import (
 //   - never probed (no rows anywhere): visible by default
 //   - busy states — limited, unreachable, auth_error: visible (may recover)
 //   - not_available rows: hidden for that credential
+//   - provider_blocked rows: hidden for that credential (third-party
+//     clampdown; the model cannot be served until a later probe succeeds)
 //   - provider_blocked: the credential's whole set hidden while the phase lasts
 //
 // The revive path shares this same state source: a blocked credential that a
@@ -45,7 +47,7 @@ func HiddenModelIDs(auths []*cliproxyauth.Auth) map[string]struct{} {
 				continue
 			}
 			covered[key] = struct{}{}
-			if outcome == nil || outcome.Status != StatusNotAvailable {
+			if outcome == nil || (outcome.Status != StatusNotAvailable && outcome.Status != StatusProviderBlocked) {
 				servable[key] = struct{}{}
 			}
 		}
