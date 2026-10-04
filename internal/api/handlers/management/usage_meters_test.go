@@ -3,9 +3,11 @@ package management
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,7 +195,7 @@ func TestNativeQuotaSupportTypes(t *testing.T) {
 
 func TestMapMirasimLimitsVariants(t *testing.T) {
 	full := []byte(`{"plan":"PRO","limit":100,"used":25,"reset_at":"2026-10-01T00:00:00Z"}`)
-	resp := mapMirasimLimits(full, "")
+	resp := mapMirasimLimits(full, "", nil)
 	if resp.Subscription == nil || resp.Subscription.Plan != "PRO" {
 		t.Fatalf("plan mapping = %+v", resp.Subscription)
 	}
@@ -212,7 +214,7 @@ func TestMapMirasimLimitsVariants(t *testing.T) {
 	}
 
 	credits := []byte(`{"total_credits":50,"used_credits":10,"next_reset":"soon"}`)
-	resp2 := mapMirasimLimits(credits, "")
+	resp2 := mapMirasimLimits(credits, "", nil)
 	if len(resp2.Groups) != 1 || resp2.Groups[0].Buckets[0].RemainingFraction != 0.8 {
 		t.Fatalf("credits variant = %+v", resp2)
 	}
@@ -221,22 +223,23 @@ func TestMapMirasimLimitsVariants(t *testing.T) {
 	}
 
 	fractionOnly := []byte(`{"remaining_fraction":0.3}`)
-	resp3 := mapMirasimLimits(fractionOnly, "")
+	resp3 := mapMirasimLimits(fractionOnly, "", nil)
 	if len(resp3.Groups) != 1 || resp3.Groups[0].Buckets[0].RemainingFraction != 0.3 {
 		t.Fatalf("fraction variant = %+v", resp3)
 	}
 
-	if resp4 := mapMirasimLimits([]byte(`not json`), ""); len(resp4.Groups) != 0 {
+	if resp4 := mapMirasimLimits([]byte(`not json`), "", nil); len(resp4.Groups) != 0 {
 		t.Fatalf("invalid body must not create groups: %+v", resp4)
 	}
 
 	// Vendor lane: budget windows with paid marker (the official client's
-	// /v1/limits shape); model-scoped windows split into their own group.
+	// /v1/limits shape); model-scoped windows split into their own group,
+	// localized group names, period labels and trimmed counters.
 	vendor := []byte(`{"paid":false,"windows":[
 		{"name":"weekly","budget":100,"used":25,"reset_at":"2026-10-08T00:00:00Z"},
 		{"name":"claude-sonnet-4-6","budget":40,"used":40,"model_scoped":true,"status":"limit_reached"}
 	]}`)
-	respVendor := mapMirasimLimits(vendor, "go")
+	respVendor := mapMirasimLimits(vendor, "go", []string{"claude-sonnet-4-6"})
 	if respVendor.Subscription == nil || respVendor.Subscription.Plan != "go" || respVendor.Subscription.TierName != "free" {
 		t.Fatalf("vendor subscription = %+v", respVendor.Subscription)
 	}
@@ -244,16 +247,66 @@ func TestMapMirasimLimitsVariants(t *testing.T) {
 		t.Fatalf("vendor groups = %+v", respVendor.Groups)
 	}
 	accBucket := respVendor.Groups[0].Buckets[0]
-	if respVendor.Groups[0].DisplayName != "account limits" || accBucket.RemainingFraction != 0.75 || accBucket.ResetTime != "2026-10-08T00:00:00Z" {
+	if respVendor.Groups[0].DisplayName != "账号额度" || accBucket.RemainingFraction != 0.75 || accBucket.ResetTime != "2026-10-08T00:00:00Z" {
 		t.Fatalf("account window bucket = %+v", accBucket)
 	}
+	if accBucket.Description != "已用 25 / 100（25.0%）" {
+		t.Fatalf("description must be trimmed: %q", accBucket.Description)
+	}
+	// Non-integral counters keep two-trimmed decimals; integral ones drop .0.
+	budgetVal := 18640.0
+	usedVal := 2185.5
+	trimmed := mirasimWindowBucket(mirasimLimitsWindow{
+		Name:    "weekly",
+		Budget:  &budgetVal,
+		Used:    &usedVal,
+		ResetAt: json.RawMessage(`null`),
+	}, false)
+	if !strings.Contains(trimmed.Description, "已用 2185.5 / 18640") || strings.Contains(trimmed.Description, "18640.0") {
+		t.Fatalf("fractional description = %q", trimmed.Description)
+	}
+	if len(respVendor.Summary) != 1 {
+		t.Fatalf("summary metrics = %+v", respVendor.Summary)
+	}
+	summaryLabel := fmt.Sprint(respVendor.Summary[0].Label)
+	if summaryLabel != "近 7 天已用" {
+		t.Fatalf("summary label = %q, want period label", summaryLabel)
+	}
 	modelBucket := respVendor.Groups[1].Buckets[0]
-	if respVendor.Groups[1].DisplayName != "model limits" || modelBucket.Window != "claude-sonnet-4-6" || modelBucket.RemainingFraction != 0 {
+	if respVendor.Groups[1].DisplayName != "按模型额度" || modelBucket.Window != "claude-sonnet-4-6" || modelBucket.RemainingFraction != 0 {
 		t.Fatalf("model window bucket = %+v", modelBucket)
 	}
 
+	// Noise windows (0-use scoped families absent from the roster) drop out;
+	// a matching family or any usage keeps the bucket.
+	noisy := []byte(`{"windows":[
+		{"name":"weekly","budget":100,"used":5},
+		{"name":"7d_claude","budget":18640,"used":0,"model_scoped":true},
+		{"name":"7d_kimi","budget":18640,"used":0,"model_scoped":true},
+		{"name":"7d_deepseek","budget":18640,"used":12,"model_scoped":true}
+	]}`)
+	respNoisy := mapMirasimLimits(noisy, "go", []string{"kimi-k3", "glm-5.3-flash", "deepseek-flash"})
+	if len(respNoisy.Groups) != 2 || len(respNoisy.Groups[1].Buckets) != 2 {
+		t.Fatalf("noise-filtered groups = %+v", respNoisy.Groups)
+	}
+	windowsSeen := map[string]bool{}
+	for _, bucket := range respNoisy.Groups[1].Buckets {
+		windowsSeen[bucket.Window] = true
+	}
+	if windowsSeen["7d_claude"] {
+		t.Fatalf("0-use absent-family window must drop: %+v", windowsSeen)
+	}
+	if !windowsSeen["7d_kimi"] || !windowsSeen["7d_deepseek"] {
+		t.Fatalf("roster-family or used windows must stay: %+v", windowsSeen)
+	}
+	// Without a roster the filter fails open.
+	respOpen := mapMirasimLimits(noisy, "go", nil)
+	if len(respOpen.Groups) != 2 || len(respOpen.Groups[1].Buckets) != 3 {
+		t.Fatalf("roster-less must keep every scoped window: %+v", respOpen.Groups)
+	}
+
 	// plan=go style empty relay answer: explicit marker instead of blank {}.
-	respEmpty := mapMirasimLimits([]byte(`{}`), "go")
+	respEmpty := mapMirasimLimits([]byte(`{}`), "go", nil)
 	if respEmpty.Subscription == nil || respEmpty.Subscription.Plan != "go" {
 		t.Fatalf("marker subscription = %+v", respEmpty.Subscription)
 	}

@@ -40,6 +40,12 @@ const (
 	// StatusUnreachable means the upstream could not be reached; keep the
 	// model and retry next cycle.
 	StatusUnreachable Status = "unreachable"
+	// StatusUnknown means the probe request itself was unreadable (e.g. the
+	// mirasim relay anti-probe shape detector refused the request form). It
+	// says nothing about the model: sections never record it as a PerModel
+	// row, so the model stays visible and is re-evaluated next cycle as
+	// unprobed.
+	StatusUnknown Status = "unknown"
 )
 
 // ModelOutcome is the per-model result of one probe attempt.

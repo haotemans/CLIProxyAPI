@@ -86,6 +86,22 @@ const mirasimRosterBody = `{"data":[
 	{"id":"claude-haiku-4-5"}
 ]}`
 
+func TestMirasimModelFamilyPrefixes(t *testing.T) {
+	for id, want := range map[string]string{
+		"kimi-k3":                      "kimi",
+		"glm-5.3-flash":                "glm",
+		"deepseek-flash":               "deepseek",
+		"deepseek-v4-flash-vision-exp": "deepseek",
+		"claude-sonnet-4-6":            "claude",
+		"gpt-5.2":                      "mirasim",
+		"something-new-1":              "mirasim",
+	} {
+		if got := mirasimModelFamily(id); got != want {
+			t.Fatalf("mirasimModelFamily(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
+
 func TestMirasimRosterRegisteredPerCredential(t *testing.T) {
 	wire := newMirasimRelayWire(t, mirasimRosterBody)
 	tmpDir := t.TempDir()
@@ -106,6 +122,21 @@ func TestMirasimRosterRegisteredPerCredential(t *testing.T) {
 	for _, want := range []string{"claude-sonnet-4-6", "gpt-5.2", "claude-haiku-4-5"} {
 		if !ids[want] {
 			t.Fatalf("roster id %s missing from registry: %v", want, ids)
+		}
+	}
+	// Family badges follow the true id family: the static claude clone keeps
+	// "claude", relay-only families map by prefix, unknown falls to mirasim.
+	typesByID := map[string]string{}
+	for _, model := range GlobalModelRegistry().GetModelsForClient(auth.ID) {
+		typesByID[model.ID] = model.Type
+	}
+	for id, wantType := range map[string]string{
+		"claude-sonnet-4-6": "claude",
+		"gpt-5.2":           "mirasim",
+		"claude-haiku-4-5":  "claude",
+	} {
+		if got := typesByID[id]; got != wantType {
+			t.Fatalf("type[%s] = %q, want %q", id, got, wantType)
 		}
 	}
 	if ids["vendor/claude-3-7-sonnet"] || ids["claude-haiku-4-5-20251001"] {

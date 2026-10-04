@@ -141,8 +141,26 @@ func buildMirasimRosterModels(ids []string) []*ModelInfo {
 			Object:  "model",
 			Created: now,
 			OwnedBy: mirasimauth.Provider,
-			Type:    "claude",
+			Type:    mirasimModelFamily(id),
 		})
 	}
 	return out
+}
+
+// mirasimModelFamily labels a relay-roster id with its true family (the
+// panel's "支持的模型" dialog badges by this type).
+func mirasimModelFamily(id string) string {
+	id = strings.ToLower(strings.TrimSpace(id))
+	switch {
+	case strings.HasPrefix(id, "kimi-"):
+		return "kimi"
+	case strings.HasPrefix(id, "glm-"):
+		return "glm"
+	case strings.HasPrefix(id, "deepseek-"):
+		return "deepseek"
+	case strings.HasPrefix(id, "claude-"):
+		return "claude"
+	default:
+		return mirasimauth.Provider
+	}
 }

@@ -43,6 +43,51 @@ var limitedMarkers = []string{
 	"model is unavailable",
 }
 
+// deprecatedModelMarkers are texts meaning the account can never run this
+// id — officially deprecated naming (mirasim's relay answers these for
+// retired deepseek-v4-flash candidates; the change log replaced them with
+// the v4.1 ids). They read like temporary blocks, so they need their own
+// pre-status table check: prune the model, don't keep re-classifying it as
+// busy. The probe's two-tier revive path lifts it automatically if upstream
+// heals the id.
+var deprecatedModelMarkers = []string{
+	"not available to this account right now",
+	"temporarily not available to this account",
+	"temporarily unavailable to this account",
+	"switch models",
+	"暂时不能使用",
+	"暂时不可用",
+	"请换用其他模型",
+}
+
+func isDeprecatedModelMessage(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, marker := range deprecatedModelMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// unknownMarkers flag "this probe is unreadable, do not classify it at all".
+// The mirasim relay detects a max_tokens=1 probe shape and refuses it as an
+// availability probe; that refusal is signal about the request form, never
+// about model availability — the outcome must be skipped (no poison row).
+var unknownMarkers = []string{
+	"availability probe rather than work",
+}
+
+func isUnknownMessage(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, marker := range unknownMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // isLimitedMessage reports whether the error carries a transient
 // capacity/allocation marker.
 func isLimitedMessage(err error) bool {
@@ -98,6 +143,16 @@ func classifyProbeError(err error) Status {
 	// prunable "model unavailable".
 	if isProviderBlockedMessage(err) {
 		return StatusProviderBlocked
+	}
+	// Unreadable requests (mirasim's anti-probe shape detector) win over every
+	// status code: never classify them, never prune on them.
+	if isUnknownMessage(err) {
+		return StatusUnknown
+	}
+	// Officially deprecated ids speak like temporary account blocks: prune
+	// regardless of the wire status (the id never works for this account).
+	if isDeprecatedModelMessage(err) {
+		return StatusNotAvailable
 	}
 	// Capacity/allocation denials are transient for any status code: keep the
 	// model advertised and recheck next cycle instead of pruning.

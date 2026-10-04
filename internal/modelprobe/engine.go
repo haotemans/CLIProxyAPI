@@ -170,7 +170,12 @@ func (e *Engine) ProbeOne(ctx context.Context, auth *cliproxyauth.Auth, provider
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req := cliproxyexecutor.Request{Model: model, Payload: buildProbePayload(model)}
+	// Pre-flight signal first (provider-specific, e.g. mirasim's free limits
+	// lane): an exhausted model window marks limited without a model call.
+	if preflight := e.preflightOutcome(probeCtx, auth, provider, model); preflight != nil {
+		return *preflight
+	}
+	req := cliproxyexecutor.Request{Model: model, Payload: buildProbePayloadForProvider(provider, model)}
 	_, err := exec.Execute(probeCtx, auth, req, probeOptions())
 	outcome := ModelOutcome{
 		Status:    classifyProbeError(err),
@@ -306,6 +311,9 @@ func (e *Engine) applySpacing(ctx context.Context) error {
 // synthesizeSection flattens outcomes into the persisted section. Only
 // not_available lands in Pruned; limited/auth errors stay advertised, usable
 // clears previous pruning on merge (handled by Store when merging on write).
+// unknown outcomes never record a row: they say the probe request was
+// unreadable, so the model keeps its previous state (never-probed until a
+// real outcome arrives).
 func synthesizeSection(checked time.Time, outcomes map[string]ModelOutcome) *Section {
 	usable := make([]string, 0, len(outcomes))
 	pruned := make([]string, 0, len(outcomes))
@@ -313,6 +321,9 @@ func synthesizeSection(checked time.Time, outcomes map[string]ModelOutcome) *Sec
 	for id, outcome := range outcomes {
 		key := strings.ToLower(strings.TrimSpace(id))
 		if key == "" {
+			continue
+		}
+		if outcome.Status == StatusUnknown {
 			continue
 		}
 		processed := outcome
@@ -373,17 +384,34 @@ func logPrefix(opts Options) string {
 	return "modelprobe"
 }
 
+// mirasimProbeMaxTokens keeps mirasim probes work-shaped: the relay reads a
+// "max one token" request as an availability probe and refuses it, so the
+// signed relay driver probes with a real-work token budget instead.
+const mirasimProbeMaxTokens = 16
+
+// buildProbePayloadForProvider synthesizes the minimal request body for the
+// executor driver. Default shape is a single-turn chat with a one-token
+// budget; mirasim gets a work-shaped budget (see mirasimProbeMaxTokens).
+func buildProbePayloadForProvider(provider, model string) []byte {
+	maxTokens := 1
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "mirasim":
+		maxTokens = mirasimProbeMaxTokens
+	}
+	return buildProbePayload(model, maxTokens)
+}
+
 // buildProbePayload synthesizes the minimal request body shared by all
-// executor drivers (a single-turn chat with one-token budget).
-func buildProbePayload(model string) []byte {
+// executor drivers (a single-turn chat with the given token budget).
+func buildProbePayload(model string, maxTokens int) []byte {
 	payload, err := json.Marshal(map[string]any{
 		"model":      model,
 		"messages":   []map[string]string{{"role": "user", "content": "hi"}},
-		"max_tokens": 1,
+		"max_tokens": maxTokens,
 	})
 	if err != nil {
 		return []byte(
-			fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"hi"}],"max_tokens":1}`, model),
+			fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"hi"}],"max_tokens":%d}`, model, maxTokens),
 		)
 	}
 	return payload

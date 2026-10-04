@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -141,7 +142,7 @@ func (h *Handler) fetchMirasimQuota(parentCtx context.Context, auth *cliproxyaut
 		if err != nil {
 			return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("mirasim quota probe failed: %w", err)
 		}
-		return mapMirasimLimits(body, storage.Plan), true, nil
+		return mapMirasimLimits(body, storage.Plan, mirasimauth.ModelsFromMetadata(auth.Metadata)), true, nil
 	}
 
 	var apiKey, baseURL string
@@ -190,7 +191,7 @@ func (h *Handler) fetchMirasimQuota(parentCtx context.Context, auth *cliproxyaut
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("mirasim quota probe returned status %d: %s", resp.StatusCode, string(body))
 	}
-	return mapMirasimLimits(body, ""), true, nil
+	return mapMirasimLimits(body, "", nil), true, nil
 }
 
 // isMirasimOAuthAuthFile reports whether the credential is a mirasim OAuth
@@ -251,8 +252,10 @@ type mirasimLimitsWindow struct {
 // plan is the credential's stored plan label (empty for api-key relays); when
 // the relay publishes no billed windows the answer still carries the plan and
 // an explicit marker bucket, so the panel can tell "plan has no billed quota"
-// from "fetch failed" — an empty {} never reads as blank again.
-func mapMirasimLimits(body []byte, plan string) pluginapi.QuotaFetchResponse {
+// from "fetch failed" — an empty {} never reads as blank again. roster passes
+// the credential's advertised model ids for scoped-window noise filtering
+// (nil disables the filter).
+func mapMirasimLimits(body []byte, plan string, roster []string) pluginapi.QuotaFetchResponse {
 	resp := pluginapi.QuotaFetchResponse{}
 	var raw mirasimLimitsPayload
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -282,7 +285,7 @@ func mapMirasimLimits(body []byte, plan string) pluginapi.QuotaFetchResponse {
 		resp.Groups = raw.Groups
 	}
 
-	informative := mapMirasimWindows(&resp, raw.Windows, raw.Degraded)
+	informative := mapMirasimWindows(&resp, raw.Windows, raw.Degraded, roster)
 	if informative {
 		return resp
 	}
@@ -338,15 +341,23 @@ func mapMirasimLimits(body []byte, plan string) pluginapi.QuotaFetchResponse {
 }
 
 // mapMirasimWindows maps vendor budget windows: account windows into
-// "account limits", model-scoped windows into their own group so one
-// exhausted model never reads as an exhausted account. Returns false when no
-// window carried usable data.
-func mapMirasimWindows(resp *pluginapi.QuotaFetchResponse, windows []mirasimLimitsWindow, degraded bool) bool {
+// "账号额度", model-scoped windows into "按模型额度" so one exhausted model
+// never reads as an exhausted account. Noise filter: a model-scoped window
+// with zero use whose family is absent from the credential roster (relic
+// windows for models the account cannot even request) is dropped entirely,
+// so plan=go cards don't wear every family upstream ever heard of.
+// roster ids are exact lowercase model ids; an empty/unknown roster disables
+// ONLY the noise filter (fail open: everything shows).
+// Returns false when no window carried usable data.
+func mapMirasimWindows(resp *pluginapi.QuotaFetchResponse, windows []mirasimLimitsWindow, degraded bool, roster []string) bool {
 	account := make([]pluginapi.QuotaBucket, 0, len(windows))
 	scoped := make([]pluginapi.QuotaBucket, 0, len(windows))
 	for _, window := range windows {
 		name := strings.TrimSpace(window.Name)
 		if name == "" || window.Budget == nil || window.Used == nil {
+			continue
+		}
+		if window.ModelScoped && mirasimWindowIsRosterNoise(window, roster) {
 			continue
 		}
 		bucket := mirasimWindowBucket(window, degraded)
@@ -358,7 +369,7 @@ func mapMirasimWindows(resp *pluginapi.QuotaFetchResponse, windows []mirasimLimi
 		if window.UsedPercent != nil {
 			resp.Summary = append(resp.Summary, pluginapi.QuotaMetric{
 				Key:    "used_" + name,
-				Label:  name + " used",
+				Label:  mirasimWindowLabel(name),
 				Value:  *window.UsedPercent,
 				Unit:   "%",
 				Format: "number",
@@ -366,7 +377,7 @@ func mapMirasimWindows(resp *pluginapi.QuotaFetchResponse, windows []mirasimLimi
 		} else if *window.Budget > 0 {
 			resp.Summary = append(resp.Summary, pluginapi.QuotaMetric{
 				Key:    "used_" + name,
-				Label:  name + " used",
+				Label:  mirasimWindowLabel(name),
 				Value:  *window.Used / *window.Budget * 100,
 				Unit:   "%",
 				Format: "number",
@@ -374,12 +385,60 @@ func mapMirasimWindows(resp *pluginapi.QuotaFetchResponse, windows []mirasimLimi
 		}
 	}
 	if len(account) > 0 {
-		resp.Groups = append(resp.Groups, pluginapi.QuotaGroup{DisplayName: "account limits", Buckets: account})
+		resp.Groups = append(resp.Groups, pluginapi.QuotaGroup{DisplayName: "账号额度", Buckets: account})
 	}
 	if len(scoped) > 0 {
-		resp.Groups = append(resp.Groups, pluginapi.QuotaGroup{DisplayName: "model limits", Buckets: scoped})
+		resp.Groups = append(resp.Groups, pluginapi.QuotaGroup{DisplayName: "按模型额度", Buckets: scoped})
 	}
 	return len(account)+len(scoped) > 0
+}
+
+// mirasimWindowLabel renders the billing window period as a localized-ish
+// summary label mirroring the clean Devin shape ("近 7 天已用").
+func mirasimWindowLabel(name string) string {
+	n := strings.ToLower(strings.TrimSpace(name))
+	switch {
+	case strings.Contains(n, "7d"), strings.Contains(n, "weekly"):
+		return "近 7 天已用"
+	case strings.Contains(n, "24h"), strings.Contains(n, "daily"):
+		return "近 24 小时已用"
+	case strings.Contains(n, "5h"), strings.Contains(n, "hour"):
+		return "近 5 小时已用"
+	default:
+		return strings.TrimSpace(name) + " 已用"
+	}
+}
+
+// mirasimWindowIsRosterNoise reports whether a model-scoped window is known
+// noise: zero use AND its family is not among the credential's roster ids.
+// Any use at all makes the window real (kept); an unknown roster keeps
+// everything (fail open).
+func mirasimWindowIsRosterNoise(window mirasimLimitsWindow, roster []string) bool {
+	if window.Used == nil || *window.Used != 0 || len(roster) == 0 {
+		return false
+	}
+	family := mirasimWindowFamily(window.Name)
+	if family == "" {
+		return false
+	}
+	for _, id := range roster {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(id)), family+"-") {
+			return false
+		}
+	}
+	return true
+}
+
+// mirasimWindowFamily extracts the model family out of a scoped window name
+// ("7d_claude" → "claude"); empty when no known family token appears.
+func mirasimWindowFamily(name string) string {
+	n := strings.ToLower(strings.TrimSpace(name))
+	for _, family := range []string{"claude", "kimi", "glm", "deepseek", "gpt", "codex", "dsh", "zcode"} {
+		if n == family || strings.HasPrefix(n, family+"-") || strings.Contains(n, "_"+family) {
+			return family
+		}
+	}
+	return ""
 }
 
 func mirasimWindowBucket(window mirasimLimitsWindow, degraded bool) pluginapi.QuotaBucket {
@@ -394,10 +453,17 @@ func mirasimWindowBucket(window mirasimLimitsWindow, degraded bool) pluginapi.Qu
 		remaining = r
 	}
 	parts := make([]string, 0, 3)
-	if window.UsedPercent != nil {
-		parts = append(parts, fmt.Sprintf("%.1f%% used", *window.UsedPercent))
-	} else if window.Budget != nil {
-		parts = append(parts, fmt.Sprintf("%.1f / %.1f used", *window.Used, *window.Budget))
+	if window.Budget != nil {
+		usedText := trimMirasimNumber(*window.Used)
+		if window.Budget != nil && *window.Budget > 0 && *window.Used > 0 {
+			percent := *window.Used / *window.Budget * 100
+			if window.UsedPercent != nil {
+				percent = *window.UsedPercent
+			}
+			parts = append(parts, fmt.Sprintf("已用 %s / %s（%.1f%%）", usedText, trimMirasimNumber(*window.Budget), percent))
+		} else if window.Budget != nil {
+			parts = append(parts, fmt.Sprintf("已用 %s / %s", usedText, trimMirasimNumber(*window.Budget)))
+		}
 	}
 	if status := strings.TrimSpace(window.Status); status != "" {
 		parts = append(parts, strings.ReplaceAll(status, "_", " "))
@@ -414,6 +480,16 @@ func mirasimWindowBucket(window mirasimLimitsWindow, degraded bool) pluginapi.Qu
 		bucket.ResetTime = reset
 	}
 	return bucket
+}
+
+// trimMirasimNumber renders budget counters card-cleanly: integers without
+// the trailing .0, otherwise two decimals with zeros trimmed (2185.5 stays
+// "2185.5", 18640.0 becomes "18640").
+func trimMirasimNumber(v float64) string {
+	if v == math.Trunc(v) {
+		return fmt.Sprintf("%.0f", v)
+	}
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", v), "0"), ".")
 }
 
 // mirasimWindowReset tolerates reset_at arriving as string or epoch seconds.
