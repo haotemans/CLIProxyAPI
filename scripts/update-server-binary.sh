@@ -10,9 +10,12 @@ SERVICE="${SERVICE:-cliproxy}"
 REPO="${REPO:-haotemans/CLIProxyAPI}"
 TAG="${TAG:-server-latest}"
 ASSET="cli-proxy-api-linux-amd64"
+PANEL_ASSET="management.html"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8317/}"
 
 BINARY="$APP_DIR/cli-proxy-api"
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
+PANEL_URL="https://github.com/${REPO}/releases/download/${TAG}/${PANEL_ASSET}"
 
 echo ">> downloading ${URL}"
 curl -fsSL "$URL" -o "${BINARY}.new"
@@ -28,9 +31,25 @@ if [[ "$expected" != "$actual" ]]; then
 fi
 chmod +x "${BINARY}.new"
 
+if curl -fsSL -m 30 "$PANEL_URL" -o "${APP_DIR}/management.html.new" 2>/dev/null; then
+  if ! cmp -s "${APP_DIR}/management.html.new" "${APP_DIR}/static/management.html" 2>/dev/null; then
+    [[ -f "${APP_DIR}/static/management.html" ]] && cp -a "${APP_DIR}/static/management.html" "${APP_DIR}/static/management.html.bak"
+    mkdir -p "${APP_DIR}/static"
+    mv "${APP_DIR}/management.html.new" "${APP_DIR}/static/management.html"
+    echo ">> panel updated"
+  else
+    rm -f "${APP_DIR}/management.html.new"
+    echo ">> panel unchanged"
+  fi
+else
+  echo ">> panel asset not found, skipping"
+fi
+
 stamp="$(date +%Y%m%d-%H%M%S)"
+PREV_BAK=""
 if [[ -f "$BINARY" ]]; then
-  cp -a "$BINARY" "${BINARY}.bak-${stamp}"
+  PREV_BAK="${BINARY}.bak-${stamp}"
+  cp -a "$BINARY" "$PREV_BAK"
 fi
 mv "${BINARY}.new" "$BINARY"
 rm -f "${BINARY}.new.sha256"
@@ -40,7 +59,18 @@ ls -t "${BINARY}".bak-* 2>/dev/null | tail -n +3 | xargs -r rm -f
 
 echo ">> restarting ${SERVICE}"
 systemctl restart "$SERVICE"
-sleep 2
-systemctl is-active --quiet "$SERVICE"
-echo ">> OK: $(stat -c '%s bytes' "$BINARY"), service active"
+sleep 8
+if ! systemctl is-active --quiet "$SERVICE" || ! curl -sf -m 10 "$HEALTH_URL" -o /dev/null; then
+  echo "!! health check failed (${HEALTH_URL})" >&2
+  if [[ -n "$PREV_BAK" && -f "$PREV_BAK" ]]; then
+    echo ">> rolling back to ${PREV_BAK}"
+    cp -a "$PREV_BAK" "$BINARY"
+    systemctl restart "$SERVICE"
+    sleep 8
+    systemctl is-active --quiet "$SERVICE" || { echo "!! rollback failed, service still down" >&2; exit 1 }
+    echo ">> rolled back, service active again"
+  fi
+  exit 1
+fi
+echo ">> OK: $(stat -c '%s bytes' "$BINARY"), service active, health check passed"
 journalctl -u "$SERVICE" --since '-10s' --no-pager | tail -3

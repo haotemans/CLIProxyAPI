@@ -12,6 +12,7 @@ on:
       - 'cmd/**'
       - 'internal/**'
       - 'sdk/**'
+      - 'management-center/**'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/server-build.yml'
@@ -77,6 +78,17 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
+      - name: Build management panel
+        uses: oven-sh/setup-bun@v2
+
+      - name: Bundle management panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash management-center/build.sh
+          cp static/management.html dist/management.html
+          test -s dist/management.html
+
       - name: Publish to rolling release
         shell: bash
         env:
@@ -93,6 +105,7 @@ jobs:
           gh release upload "$RELEASE_TAG" \
             dist/cli-proxy-api-linux-amd64 \
             dist/cli-proxy-api-linux-amd64.sha256 \
+            dist/management.html \
             --clobber
           gh release edit "$RELEASE_TAG" \
             --notes "Built from ${GITHUB_SHA} at ${BUILD_DATE} UTC by the server-build workflow."
