@@ -56,8 +56,8 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 		w.clientsMutex.Unlock()
 	}
 
-	geminiAPIKeyCount, vertexCompatAPIKeyCount, claudeAPIKeyCount, mirasimAPIKeyCount, commandcodeAPIKeyCount, opencodeGoAPIKeyCount, clineAPIKeyCount, codexAPIKeyCount, xaiAPIKeyCount, metaAPIKeyCount, openAICompatCount := BuildAPIKeyClients(cfg)
-	totalAPIKeyClients := geminiAPIKeyCount + vertexCompatAPIKeyCount + claudeAPIKeyCount + mirasimAPIKeyCount + commandcodeAPIKeyCount + opencodeGoAPIKeyCount + clineAPIKeyCount + codexAPIKeyCount + xaiAPIKeyCount + metaAPIKeyCount + openAICompatCount
+	geminiAPIKeyCount, vertexCompatAPIKeyCount, claudeAPIKeyCount, mirasimAPIKeyCount, commandcodeAPIKeyCount, opencodeGoAPIKeyCount, clineAPIKeyCount, codexAPIKeyCount, xaiAPIKeyCount, devinAPIKeyCount, metaAPIKeyCount, openAICompatCount := BuildAPIKeyClients(cfg)
+	totalAPIKeyClients := geminiAPIKeyCount + vertexCompatAPIKeyCount + claudeAPIKeyCount + mirasimAPIKeyCount + commandcodeAPIKeyCount + opencodeGoAPIKeyCount + clineAPIKeyCount + codexAPIKeyCount + xaiAPIKeyCount + devinAPIKeyCount + metaAPIKeyCount + openAICompatCount
 	log.Debugf("loaded %d API key clients", totalAPIKeyClients)
 
 	var authFileCount int
@@ -139,7 +139,7 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 		w.authRescanMu.Unlock()
 	}
 
-	totalNewClients := authFileCount + geminiAPIKeyCount + vertexCompatAPIKeyCount + claudeAPIKeyCount + mirasimAPIKeyCount + commandcodeAPIKeyCount + opencodeGoAPIKeyCount + clineAPIKeyCount + codexAPIKeyCount + xaiAPIKeyCount + metaAPIKeyCount + openAICompatCount
+	totalNewClients := authFileCount + geminiAPIKeyCount + vertexCompatAPIKeyCount + claudeAPIKeyCount + mirasimAPIKeyCount + commandcodeAPIKeyCount + opencodeGoAPIKeyCount + clineAPIKeyCount + codexAPIKeyCount + xaiAPIKeyCount + devinAPIKeyCount + metaAPIKeyCount + openAICompatCount
 
 	if w.reloadCallback != nil {
 		log.Debugf("triggering server update callback before auth refresh")
@@ -149,7 +149,7 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 	w.refreshAuthState(forceAuthRefresh)
 	redisqueue.NotifyUsageRefresh()
 
-	log.Infof("full client load complete - %d clients (%d auth files + %d Gemini API keys + %d Vertex API keys + %d Claude API keys + %d Mirasim API keys + %d Commandcode API keys + %d OpenCode Go API keys + %d Cline keys + %d Codex keys + %d xAI keys + %d Meta API keys + %d OpenAI-compat)",
+	log.Infof("full client load complete - %d clients (%d auth files + %d Gemini API keys + %d Vertex API keys + %d Claude API keys + %d Mirasim API keys + %d Commandcode API keys + %d OpenCode Go API keys + %d Cline keys + %d Codex keys + %d xAI keys + %d Devin keys + %d Meta API keys + %d OpenAI-compat)",
 		totalNewClients,
 		authFileCount,
 		geminiAPIKeyCount,
@@ -161,6 +161,7 @@ func (w *Watcher) reloadClients(rescanAuth bool, affectedOAuthProviders []string
 		clineAPIKeyCount,
 		codexAPIKeyCount,
 		xaiAPIKeyCount,
+		devinAPIKeyCount,
 		metaAPIKeyCount,
 		openAICompatCount,
 	)
@@ -391,7 +392,7 @@ func (w *Watcher) loadFileClients(cfg *config.Config) int {
 	return authFileCount
 }
 
-func BuildAPIKeyClients(cfg *config.Config) (int, int, int, int, int, int, int, int, int, int, int) {
+func BuildAPIKeyClients(cfg *config.Config) (int, int, int, int, int, int, int, int, int, int, int, int) {
 	geminiAPIKeyCount := 0
 	vertexCompatAPIKeyCount := 0
 	claudeAPIKeyCount := 0
@@ -401,6 +402,7 @@ func BuildAPIKeyClients(cfg *config.Config) (int, int, int, int, int, int, int, 
 	clineAPIKeyCount := 0
 	codexAPIKeyCount := 0
 	xaiAPIKeyCount := 0
+	devinAPIKeyCount := 0
 	metaAPIKeyCount := 0
 	openAICompatCount := 0
 
@@ -434,6 +436,9 @@ func BuildAPIKeyClients(cfg *config.Config) (int, int, int, int, int, int, int, 
 	if len(cfg.XAIKey) > 0 {
 		xaiAPIKeyCount += len(cfg.XAIKey)
 	}
+	if len(cfg.DevinKey) > 0 {
+		devinAPIKeyCount += len(cfg.DevinKey)
+	}
 	if len(cfg.MetaKey) > 0 {
 		metaAPIKeyCount += len(cfg.MetaKey)
 	}
@@ -445,7 +450,7 @@ func BuildAPIKeyClients(cfg *config.Config) (int, int, int, int, int, int, int, 
 			openAICompatCount += len(compatConfig.APIKeyEntries)
 		}
 	}
-	return geminiAPIKeyCount, vertexCompatAPIKeyCount, claudeAPIKeyCount, mirasimAPIKeyCount, commandcodeAPIKeyCount, opencodeGoAPIKeyCount, clineAPIKeyCount, codexAPIKeyCount, xaiAPIKeyCount, metaAPIKeyCount, openAICompatCount
+	return geminiAPIKeyCount, vertexCompatAPIKeyCount, claudeAPIKeyCount, mirasimAPIKeyCount, commandcodeAPIKeyCount, opencodeGoAPIKeyCount, clineAPIKeyCount, codexAPIKeyCount, xaiAPIKeyCount, devinAPIKeyCount, metaAPIKeyCount, openAICompatCount
 }
 
 func (w *Watcher) persistConfigAsync() {

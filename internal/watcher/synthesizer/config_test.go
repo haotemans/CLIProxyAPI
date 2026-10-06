@@ -413,6 +413,75 @@ func TestConfigSynthesizer_XAIKeys(t *testing.T) {
 	}
 }
 
+func TestConfigSynthesizer_DevinKeys(t *testing.T) {
+	synth := NewConfigSynthesizer()
+	weight := 5
+	ctx := &SynthesisContext{
+		Config: &config.Config{
+			DevinKey: []config.DevinKey{{
+				APIKey:         "devin-key-123",
+				Prefix:         "devin",
+				BaseURL:        "https://server.codeium.com",
+				ProxyURL:       "http://proxy.local",
+				Weight:         &weight,
+				DisableCooling: boolPointer(true),
+				Headers:        map[string]string{"X-Custom": "value"},
+				Models:         []config.DevinModel{{Name: "devin/swe-2", Alias: "swe-2"}},
+			}},
+		},
+		Now:         time.Now(),
+		IDGenerator: NewStableIDGenerator(),
+	}
+
+	auths, errSynthesize := synth.Synthesize(ctx)
+	if errSynthesize != nil {
+		t.Fatalf("Synthesize() error = %v", errSynthesize)
+	}
+	if len(auths) != 1 {
+		t.Fatalf("auth count = %d, want 1", len(auths))
+	}
+	auth := auths[0]
+	if auth.Provider != "devin" {
+		t.Fatalf("provider = %q, want devin", auth.Provider)
+	}
+	if auth.Label != "devin-apikey" {
+		t.Fatalf("label = %q, want devin-apikey", auth.Label)
+	}
+	if auth.Attributes["api_key"] != "devin-key-123" {
+		t.Fatalf("api_key = %q, want devin-key-123", auth.Attributes["api_key"])
+	}
+	if auth.Attributes["base_url"] != "https://server.codeium.com" {
+		t.Fatalf("base_url = %q, want https://server.codeium.com", auth.Attributes["base_url"])
+	}
+	if auth.Attributes["config_index"] != "0" {
+		t.Fatalf("config_index = %q, want 0", auth.Attributes["config_index"])
+	}
+	if auth.Attributes["weight"] != "5" {
+		t.Fatalf("weight = %q, want 5", auth.Attributes["weight"])
+	}
+	if auth.Prefix != "devin" {
+		t.Fatalf("prefix = %q, want devin", auth.Prefix)
+	}
+	if _, exists := auth.Attributes["websockets"]; exists {
+		t.Fatal("devin auth unexpectedly contains websockets")
+	}
+	if _, exists := auth.Attributes[coreauth.AttributeCodexAlphaSearch]; exists {
+		t.Fatal("devin auth unexpectedly contains codex_alpha_search")
+	}
+	if auth.Attributes["header:X-Custom"] != "value" {
+		t.Fatalf("custom header = %q, want value", auth.Attributes["header:X-Custom"])
+	}
+	if auth.Attributes["models_hash"] == "" {
+		t.Fatal("models_hash is empty")
+	}
+	if auth.ProxyURL != "http://proxy.local" {
+		t.Fatalf("proxy URL = %q, want http://proxy.local", auth.ProxyURL)
+	}
+	if disabled, ok := auth.Metadata["disable_cooling"].(bool); !ok || !disabled {
+		t.Fatalf("disable_cooling = %#v, want true", auth.Metadata["disable_cooling"])
+	}
+}
+
 func TestConfigSynthesizer_MetaKeys(t *testing.T) {
 	synth := NewConfigSynthesizer()
 	disableCooling := true

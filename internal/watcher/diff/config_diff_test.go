@@ -307,6 +307,51 @@ func TestBuildConfigChangeDetails_XAIKeys(t *testing.T) {
 	expectContains(t, changes, "xai[0].excluded-models: updated (1 -> 1 entries)")
 }
 
+func TestBuildConfigChangeDetails_DevinKeys(t *testing.T) {
+	oldRetry := 1
+	newRetry := 0
+	oldDisableCooling := false
+	newDisableCooling := true
+	oldCfg := &config.Config{DevinKey: []config.DevinKey{{
+		APIKey:         "old-key",
+		Priority:       1,
+		Prefix:         "old",
+		BaseURL:        "https://old.example.com/v1",
+		ProxyURL:       "http://old-proxy",
+		Websockets:     false,
+		DisableCooling: &oldDisableCooling,
+		RequestRetry:   &oldRetry,
+		Headers:        map[string]string{"X-Test": "old"},
+		Models:         []config.DevinModel{{Name: "swe-old", Alias: "swe"}},
+		ExcludedModels: []string{"swe-hidden"},
+	}}}
+	newCfg := &config.Config{DevinKey: []config.DevinKey{{
+		APIKey:         "new-key",
+		Priority:       2,
+		Prefix:         "new",
+		BaseURL:        "https://new.example.com/v1",
+		ProxyURL:       "http://new-proxy",
+		Websockets:     false,
+		DisableCooling: &newDisableCooling,
+		RequestRetry:   &newRetry,
+		Headers:        map[string]string{"X-Test": "new"},
+		Models:         []config.DevinModel{{Name: "swe-new", Alias: "swe"}},
+		ExcludedModels: []string{"swe-other"},
+	}}}
+
+	changes := BuildConfigChangeDetails(oldCfg, newCfg)
+	expectContains(t, changes, "devin[0].base-url: https://old.example.com -> https://new.example.com")
+	expectContains(t, changes, "devin[0].proxy-url: http://old-proxy -> http://new-proxy")
+	expectContains(t, changes, "devin[0].prefix: old -> new")
+	expectContains(t, changes, "devin[0].priority: 1 -> 2")
+	expectContains(t, changes, "devin[0].disable-cooling: false -> true")
+	expectContains(t, changes, "devin[0].request-retry: 1 -> 0")
+	expectContains(t, changes, "devin[0].api-key: updated")
+	expectContains(t, changes, "devin[0].headers: updated")
+	expectContains(t, changes, "devin[0].models: updated (1 -> 1 entries)")
+	expectContains(t, changes, "devin[0].excluded-models: updated (1 -> 1 entries)")
+}
+
 func TestBuildConfigChangeDetails_XAIForceMappingOnly(t *testing.T) {
 	oldCfg := &config.Config{XAIKey: []config.XAIKey{{
 		APIKey:  "xai-key",

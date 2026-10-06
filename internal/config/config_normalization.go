@@ -239,6 +239,39 @@ func (cfg *Config) SanitizeXAIKeys() {
 	}
 }
 
+// devinDefaultBaseURL is the public Devin upstream root.
+const devinDefaultBaseURL = "https://server.codeium.com"
+
+// SanitizeDevinKeys normalizes Devin API key entries: the base URL defaults to
+// https://server.codeium.com when omitted, entries without an API key are
+// dropped, and websockets/alpha-search are forced off (Devin supports neither
+// transport).
+func (cfg *Config) SanitizeDevinKeys() {
+	if cfg == nil || len(cfg.DevinKey) == 0 {
+		return
+	}
+	out := make([]DevinKey, 0, len(cfg.DevinKey))
+	for i := range cfg.DevinKey {
+		e := cfg.DevinKey[i]
+		e.APIKey = strings.TrimSpace(e.APIKey)
+		e.ProxyURL = strings.TrimSpace(e.ProxyURL)
+		e.Prefix = normalizeModelPrefix(e.Prefix)
+		e.BaseURL = strings.TrimSpace(e.BaseURL)
+		if e.BaseURL == "" {
+			e.BaseURL = devinDefaultBaseURL
+		}
+		e.Headers = NormalizeHeaders(e.Headers)
+		e.ExcludedModels = NormalizeExcludedModels(e.ExcludedModels)
+		e.Websockets = false
+		e.AlphaSearch = false
+		if e.APIKey == "" {
+			continue
+		}
+		out = append(out, e)
+	}
+	cfg.DevinKey = out
+}
+
 // SanitizeMetaKeys normalizes Meta API key entries, defaulting BaseURL to https://api.meta.ai/v1 if empty.
 func (cfg *Config) SanitizeMetaKeys() {
 	if cfg == nil {

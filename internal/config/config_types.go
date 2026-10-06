@@ -814,6 +814,13 @@ type XAIKey = CodexKey
 // XAIModel uses the Codex model mapping structure for xAI models.
 type XAIModel = CodexModel
 
+// DevinKey uses the Codex API key structure for native Devin execution.
+// Base-url is optional and defaults to https://server.codeium.com.
+type DevinKey = CodexKey
+
+// DevinModel uses the Codex model mapping structure for Devin models.
+type DevinModel = CodexModel
+
 // MetaKey uses the Codex API key structure for native Meta Muse execution.
 type MetaKey = CodexKey
 

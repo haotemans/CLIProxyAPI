@@ -80,6 +80,9 @@ type APIKeyClientResult struct {
 	// XAIKeyCount is the number of xAI API keys loaded
 	XAIKeyCount int
 
+	// DevinKeyCount is the number of Devin API keys loaded
+	DevinKeyCount int
+
 	// MetaKeyCount is the number of Meta API keys loaded
 	MetaKeyCount int
 

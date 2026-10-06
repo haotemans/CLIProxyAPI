@@ -36,6 +36,15 @@ func TestPatchPriorityForEveryProvider(t *testing.T) {
 			get:      func(cfg *config.Config) int { return cfg.XAIKey[0].Priority },
 		},
 		{
+			name: "devin",
+			setup: func(cfg *config.Config) {
+				cfg.DevinKey = []config.DevinKey{{APIKey: "key", BaseURL: "https://example.com"}}
+			},
+			patch:    (*Handler).PatchDevinKey,
+			endpoint: "/v0/management/devin-api-key",
+			get:      func(cfg *config.Config) int { return cfg.DevinKey[0].Priority },
+		},
+		{
 			name: "meta",
 			setup: func(cfg *config.Config) {
 				cfg.MetaKey = []config.MetaKey{{APIKey: "key", BaseURL: "https://example.com"}}

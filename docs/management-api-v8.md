@@ -39,6 +39,7 @@ the corresponding group value. Legacy field names are rejected by v8 writes.
 | `/config/access/api-keys` | Client authentication keys, for example `["client-key"]`. |
 | `/config/api-keys` | All upstream provider groups. |
 | `/config/api-keys/codex` | Codex upstream groups. |
+| `/config/api-keys/devin` | Devin upstream groups; `base-url` defaults to `https://server.codeium.com` and websockets are forced off. |
 | `/config/client/codex/optimize-multi-agent-v2` | Boolean, default `false`; applies to Codex clients across OAuth and API-key routes. |
 | `/config/observability/logs/debug` | A boolean, for example `true`. |
 | `/config/routing/retry/request-retry` | A number, for example `0`. |
@@ -151,6 +152,11 @@ Legacy flat configuration endpoints such as `/debug`, `/request-retry`, and
 `/codex-api-key` exist under `/v0/management` only.
 `/v0/management/api-keys` continues to manage client authentication keys; the v8
 equivalent is `/v8/management/config/access/api-keys`.
+
+Credential quota endpoints (`/v0/management/quota/providers`, `/quota/fetch`,
+`/quota/reset`) exist under `/v0/management` only. Devin has a native quota lane
+there: `POST /quota/fetch` with a devin credential reads the seat management API
+and reports `daily` and `weekly` remaining-percent buckets.
 
 Legacy-only configuration files keep their layout until a successful v8
 configuration write. When both layouts specify a field, the new field takes

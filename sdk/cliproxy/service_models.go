@@ -226,6 +226,14 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 		models = applyExcludedModels(models, excluded)
 	case "devin":
 		models = registry.GetDevinModels()
+		if entry := s.resolveConfigDevinKey(a); entry != nil {
+			if len(entry.Models) > 0 {
+				models = buildDevinConfigModels(entry)
+			}
+			if authKind == "apikey" {
+				excluded = entry.ExcludedModels
+			}
+		}
 		models = applyExcludedModels(models, excluded)
 	case "meta":
 		models = registry.GetMetaModels()
@@ -670,6 +678,13 @@ func (s *Service) resolveConfigXAIKey(auth *coreauth.Auth) *config.XAIKey {
 	return resolveConfigCodexStyleKey(auth, s.cfg.XAIKey, false)
 }
 
+func (s *Service) resolveConfigDevinKey(auth *coreauth.Auth) *config.DevinKey {
+	if s == nil || s.cfg == nil {
+		return nil
+	}
+	return resolveConfigCodexStyleKey(auth, s.cfg.DevinKey, false)
+}
+
 func (s *Service) resolveConfigMetaKey(auth *coreauth.Auth) *config.MetaKey {
 	if s == nil || s.cfg == nil {
 		return nil
@@ -1110,6 +1125,13 @@ func buildXAIConfigModels(entry *config.XAIKey) []*ModelInfo {
 		return nil
 	}
 	return buildConfigModels(entry.Models, "xai", "xai", "xai")
+}
+
+func buildDevinConfigModels(entry *config.DevinKey) []*ModelInfo {
+	if entry == nil {
+		return nil
+	}
+	return buildConfigModels(entry.Models, "devin", "devin", "devin")
 }
 
 func buildMetaConfigModels(entry *config.MetaKey) []*ModelInfo {

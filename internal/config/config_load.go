@@ -179,6 +179,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	// Sanitize xAI keys: drop entries without base-url
 	cfg.SanitizeXAIKeys()
 
+	// Sanitize Devin keys: default the base-url when omitted, drop entries without api-key
+	cfg.SanitizeDevinKeys()
+
 	// Sanitize Meta keys.
 	cfg.SanitizeMetaKeys()
 

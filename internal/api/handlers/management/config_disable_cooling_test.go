@@ -93,6 +93,18 @@ func TestPatchDisableCoolingOverrideForEveryFamily(t *testing.T) {
 			get:   func(cfg *config.Config) *bool { return cfg.XAIKey[0].DisableCooling },
 		},
 		{
+			name: "devin",
+			setup: func(cfg *config.Config) {
+				cfg.DevinKey = []config.DevinKey{{
+					APIKey:         "key",
+					BaseURL:        "https://server.codeium.com",
+					DisableCooling: &initial,
+				}}
+			},
+			patch: (*Handler).PatchDevinKey,
+			get:   func(cfg *config.Config) *bool { return cfg.DevinKey[0].DisableCooling },
+		},
+		{
 			name: "meta",
 			setup: func(cfg *config.Config) {
 				cfg.MetaKey = []config.MetaKey{{

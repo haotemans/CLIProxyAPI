@@ -192,6 +192,11 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.PATCH("/xai-api-key", s.mgmt.PatchXAIKey)
 		mgmt.DELETE("/xai-api-key", s.mgmt.DeleteXAIKey)
 
+		mgmt.GET("/devin-api-key", s.mgmt.GetDevinKeys)
+		mgmt.PUT("/devin-api-key", s.mgmt.PutDevinKeys)
+		mgmt.PATCH("/devin-api-key", s.mgmt.PatchDevinKey)
+		mgmt.DELETE("/devin-api-key", s.mgmt.DeleteDevinKey)
+
 		mgmt.GET("/meta-api-key", s.mgmt.GetMetaKeys)
 		mgmt.PUT("/meta-api-key", s.mgmt.PutMetaKeys)
 		mgmt.PATCH("/meta-api-key", s.mgmt.PatchMetaKey)

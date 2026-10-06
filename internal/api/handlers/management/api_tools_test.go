@@ -184,6 +184,10 @@ func TestAPICallTransportAPIKeyAuthFallsBackToConfigProxyURL(t *testing.T) {
 				APIKey:   "xai-key",
 				ProxyURL: "http://xai-proxy.example.com:8080",
 			}},
+			DevinKey: []config.DevinKey{{
+				APIKey:   "devin-key",
+				ProxyURL: "http://devin-proxy.example.com:8080",
+			}},
 			MetaKey: []config.MetaKey{{
 				APIKey:   "meta-key",
 				ProxyURL: "http://meta-proxy.example.com:8080",
@@ -235,6 +239,14 @@ func TestAPICallTransportAPIKeyAuthFallsBackToConfigProxyURL(t *testing.T) {
 				Attributes: map[string]string{"api_key": "xai-key"},
 			},
 			wantProxy: "http://xai-proxy.example.com:8080",
+		},
+		{
+			name: "devin",
+			auth: &coreauth.Auth{
+				Provider:   "devin",
+				Attributes: map[string]string{"api_key": "devin-key"},
+			},
+			wantProxy: "http://devin-proxy.example.com:8080",
 		},
 		{
 			name: "meta",

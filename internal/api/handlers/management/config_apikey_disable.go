@@ -176,6 +176,21 @@ func toggleConfigAPIKeyExcludedAll(cfg *config.Config, auth *coreauth.Auth, disa
 			return true, nil
 		}
 	}
+	for i := range cfg.DevinKey {
+		entry := &cfg.DevinKey[i]
+		key := strings.TrimSpace(entry.APIKey)
+		base := strings.TrimSpace(entry.BaseURL)
+		proxyURL := strings.TrimSpace(entry.ProxyURL)
+		prefix := strings.TrimSpace(entry.Prefix)
+		if key == "" && base == "" {
+			continue
+		}
+		id, _ := idGen.Next("devin:apikey", key, base, proxyURL, prefix, config.FormatSortedHeaders(entry.Headers))
+		if id == authID {
+			entry.ExcludedModels = setConfigAPIKeyExcludedAll(entry.ExcludedModels, disable)
+			return true, nil
+		}
+	}
 	for i := range cfg.MetaKey {
 		entry := &cfg.MetaKey[i]
 		key := strings.TrimSpace(entry.APIKey)

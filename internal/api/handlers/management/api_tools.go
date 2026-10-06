@@ -962,6 +962,10 @@ func proxyURLFromAPIKeyConfig(cfg *config.Config, auth *coreauth.Auth) string {
 		if entry := resolveAPIKeyConfig(cfg.XAIKey, auth); entry != nil {
 			return strings.TrimSpace(entry.ProxyURL)
 		}
+	case "devin":
+		if entry := resolveAPIKeyConfig(cfg.DevinKey, auth); entry != nil {
+			return strings.TrimSpace(entry.ProxyURL)
+		}
 	case "meta":
 		if entry := resolveAPIKeyConfig(cfg.MetaKey, auth); entry != nil {
 			return strings.TrimSpace(entry.ProxyURL)

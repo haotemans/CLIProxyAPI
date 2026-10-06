@@ -40,7 +40,7 @@ func (r credentialQuotaRequest) resolveAuthIndex() string {
 }
 
 // GetQuotaProviders returns the list of registered quota providers.
-// Builtin native quota fetchers (kiro, mirasim) are merged into the list.
+// Builtin native quota fetchers (kiro, mirasim, devin) are merged into the list.
 func (h *Handler) GetQuotaProviders(c *gin.Context) {
 	providers := make([]any, 0, len(nativeQuotaProviders))
 	for _, provider := range nativeQuotaProviders {
@@ -117,7 +117,7 @@ func (h *Handler) FetchCredentialQuota(c *gin.Context) {
 		}
 	}
 
-	// Native builtin quota fetchers (kiro, mirasim) run ahead of probes.
+	// Native builtin quota fetchers (kiro, mirasim, devin) run ahead of probes.
 	if quotaResp, handledNative, errNative := h.tryNativeQuotaFetch(c.Request.Context(), auth); handledNative {
 		if errNative != nil {
 			log.WithError(errNative).Warnf("failed to fetch native quota for credential %s", auth.Index)

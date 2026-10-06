@@ -91,11 +91,11 @@ func TestGetQuotaProviders_Endpoint(t *testing.T) {
 		t.Fatalf("failed to decode json: %v", errUnmarshal)
 	}
 	providers, ok := emptyResp["providers"].([]any)
-	if !ok || len(providers) != 2 {
+	if !ok || len(providers) != 3 {
 		t.Fatalf("expected native quota providers without plugin host, got %#v", emptyResp)
 	}
-	if providers[0] != "kiro" || providers[1] != "mirasim" {
-		t.Fatalf("expected kiro/mirasim natives first, got %#v", emptyResp)
+	if providers[0] != "kiro" || providers[1] != "mirasim" || providers[2] != "devin" {
+		t.Fatalf("expected kiro/mirasim/devin natives first, got %#v", emptyResp)
 	}
 
 	// Case 2: With quota plugin
@@ -121,10 +121,10 @@ func TestGetQuotaProviders_Endpoint(t *testing.T) {
 		t.Fatalf("failed to decode json: %v", errUnmarshal)
 	}
 	providers2, ok2 := populatedResp["providers"].([]any)
-	if !ok2 || len(providers2) != 3 {
+	if !ok2 || len(providers2) != 4 {
 		t.Fatalf("expected natives + one plugin quota provider, got %#v", populatedResp)
 	}
-	if entry, isMap := providers2[2].(map[string]any); !isMap || entry["provider"] != "opencode-go" {
+	if entry, isMap := providers2[3].(map[string]any); !isMap || entry["provider"] != "opencode-go" {
 		t.Fatalf("plugin quota provider should follow natives, got %#v", populatedResp)
 	}
 }

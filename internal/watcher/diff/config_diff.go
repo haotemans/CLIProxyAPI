@@ -583,6 +583,49 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 		}
 	}
 
+	// Devin keys (do not print key material)
+	if len(oldCfg.DevinKey) != len(newCfg.DevinKey) {
+		changes = append(changes, fmt.Sprintf("devin-api-key count: %d -> %d", len(oldCfg.DevinKey), len(newCfg.DevinKey)))
+	} else {
+		for i := range oldCfg.DevinKey {
+			o := oldCfg.DevinKey[i]
+			n := newCfg.DevinKey[i]
+			if strings.TrimSpace(o.BaseURL) != strings.TrimSpace(n.BaseURL) {
+				changes = append(changes, fmt.Sprintf("devin[%d].base-url: %s -> %s", i, formatURL(o.BaseURL), formatURL(n.BaseURL)))
+			}
+			if strings.TrimSpace(o.ProxyURL) != strings.TrimSpace(n.ProxyURL) {
+				changes = append(changes, fmt.Sprintf("devin[%d].proxy-url: %s -> %s", i, formatProxyURL(o.ProxyURL), formatProxyURL(n.ProxyURL)))
+			}
+			if strings.TrimSpace(o.Prefix) != strings.TrimSpace(n.Prefix) {
+				changes = append(changes, fmt.Sprintf("devin[%d].prefix: %s -> %s", i, strings.TrimSpace(o.Prefix), strings.TrimSpace(n.Prefix)))
+			}
+			if o.Priority != n.Priority {
+				changes = append(changes, fmt.Sprintf("devin[%d].priority: %d -> %d", i, o.Priority, n.Priority))
+			}
+			if o.Websockets != n.Websockets {
+				changes = append(changes, fmt.Sprintf("devin[%d].websockets: %t -> %t", i, o.Websockets, n.Websockets))
+			}
+			changes = appendOptionalBoolChange(changes, fmt.Sprintf("devin[%d].disable-cooling", i), o.DisableCooling, n.DisableCooling)
+			changes = appendOptionalIntChange(changes, fmt.Sprintf("devin[%d].request-retry", i), o.RequestRetry, n.RequestRetry)
+			if strings.TrimSpace(o.APIKey) != strings.TrimSpace(n.APIKey) {
+				changes = append(changes, fmt.Sprintf("devin[%d].api-key: updated", i))
+			}
+			if !equalStringMap(o.Headers, n.Headers) {
+				changes = append(changes, fmt.Sprintf("devin[%d].headers: updated", i))
+			}
+			oldModels := SummarizeCodexModels(o.Models)
+			newModels := SummarizeCodexModels(n.Models)
+			if oldModels.hash != newModels.hash {
+				changes = append(changes, fmt.Sprintf("devin[%d].models: updated (%d -> %d entries)", i, oldModels.count, newModels.count))
+			}
+			oldExcluded := SummarizeExcludedModels(o.ExcludedModels)
+			newExcluded := SummarizeExcludedModels(n.ExcludedModels)
+			if oldExcluded.hash != newExcluded.hash {
+				changes = append(changes, fmt.Sprintf("devin[%d].excluded-models: updated (%d -> %d entries)", i, oldExcluded.count, newExcluded.count))
+			}
+		}
+	}
+
 	// Meta keys (do not print key material)
 	if len(oldCfg.MetaKey) != len(newCfg.MetaKey) {
 		changes = append(changes, fmt.Sprintf("meta-api-key count: %d -> %d", len(oldCfg.MetaKey), len(newCfg.MetaKey)))

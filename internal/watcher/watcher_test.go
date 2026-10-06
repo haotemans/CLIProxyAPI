@@ -75,15 +75,16 @@ func TestBuildAPIKeyClientsCounts(t *testing.T) {
 		ClineKey:       []config.ClineKey{{APIKey: "cl1"}},
 		CodexKey:       []config.CodexKey{{APIKey: "c1"}, {APIKey: "c2"}},
 		XAIKey:         []config.XAIKey{{APIKey: "x1"}},
+		DevinKey:       []config.DevinKey{{APIKey: "d1"}},
 		MetaKey:        []config.MetaKey{{APIKey: "m1"}},
 		OpenAICompatibility: []config.OpenAICompatibility{
 			{APIKeyEntries: []config.OpenAICompatibilityAPIKey{{APIKey: "o1"}, {APIKey: "o2"}}},
 		},
 	}
 
-	gemini, vertex, claude, mirasim, commandcode, opencodeGo, cline, codex, xai, meta, compat := BuildAPIKeyClients(cfg)
-	if gemini != 3 || vertex != 1 || claude != 1 || mirasim != 1 || commandcode != 1 || opencodeGo != 1 || cline != 1 || codex != 2 || xai != 1 || meta != 1 || compat != 2 {
-		t.Fatalf("unexpected counts: %d %d %d %d %d %d %d %d %d %d %d", gemini, vertex, claude, mirasim, commandcode, opencodeGo, cline, codex, xai, meta, compat)
+	gemini, vertex, claude, mirasim, commandcode, opencodeGo, cline, codex, xai, devin, meta, compat := BuildAPIKeyClients(cfg)
+	if gemini != 3 || vertex != 1 || claude != 1 || mirasim != 1 || commandcode != 1 || opencodeGo != 1 || cline != 1 || codex != 2 || xai != 1 || devin != 1 || meta != 1 || compat != 2 {
+		t.Fatalf("unexpected counts: %d %d %d %d %d %d %d %d %d %d %d %d", gemini, vertex, claude, mirasim, commandcode, opencodeGo, cline, codex, xai, devin, meta, compat)
 	}
 }
 

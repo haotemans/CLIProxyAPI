@@ -29,6 +29,10 @@ type GeminiKey = internalconfig.GeminiKey
 type CodexKey = internalconfig.CodexKey
 type XAIKey = internalconfig.XAIKey
 type XAIModel = internalconfig.XAIModel
+
+// DevinKey/DevinModel alias the Devin API key entries.
+type DevinKey = internalconfig.DevinKey
+type DevinModel = internalconfig.DevinModel
 type MetaKey = internalconfig.MetaKey
 type MetaModel = internalconfig.MetaModel
 type ClaudeKey = internalconfig.ClaudeKey

@@ -891,6 +891,30 @@ upstream:
 #           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
 #           websockets: true # optional: use the xAI upstream websocket transport for downstream websocket requests
 #
+#   # Devin API keys
+#   # Uses the native Devin executor. base-url is optional and defaults to
+#   # https://server.codeium.com; websockets are not supported.
+#
+#   devin:
+#     - name: devin-1
+#       prefix: "devin" # optional: require calls like "devin/swe-2" to target this credential
+#       disable-cooling: false # optional override: true disables cooling, false enables it; omit to inherit global
+#       request-retry: 3 # optional per-auth override; 0 disables additional rounds; omit or set < 0 to inherit global
+#       base-url: "https://server.codeium.com" # optional: defaults to https://server.codeium.com
+#       headers:
+#         X-Custom-Header: "custom-value"
+#       proxy-url: "socks5://proxy.example.com:1080" # optional: per-key proxy override
+#       models:
+#         - name: "devin/swe-2"    # upstream model name
+#           alias: "swe-2"         # client alias mapped to the upstream model
+#           display-name: "SWE 2"  # optional catalog display name
+#           force-mapping: true    # optional: rewrite response model fields back to the alias
+#       excluded-models:
+#         - "devin/swe-1-*"        # wildcard matching prefix
+#       keys:
+#         - api-key: "devin-..."
+#           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
+#
 #   # Meta API keys (Muse Code)
 #   # Uses the native Meta executor targeting https://api.meta.ai/v1.
 #

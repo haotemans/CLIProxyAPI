@@ -298,6 +298,33 @@ func TestDeleteMetaKey_RequiresBaseURLWhenAPIKeyDuplicated(t *testing.T) {
 	}
 }
 
+func TestDeleteDevinKey_RequiresBaseURLWhenAPIKeyDuplicated(t *testing.T) {
+	t.Parallel()
+
+	h := &Handler{
+		cfg: &config.Config{
+			DevinKey: []config.DevinKey{
+				{APIKey: "shared-key", BaseURL: "https://a.example.com"},
+				{APIKey: "shared-key", BaseURL: "https://b.example.com"},
+			},
+		},
+		configFilePath: writeTestConfigFile(t),
+	}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodDelete, "/v0/management/devin-api-key?api-key=shared-key", nil)
+
+	h.DeleteDevinKey(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if got := len(h.cfg.DevinKey); got != 2 {
+		t.Fatalf("devin keys len = %d, want 2", got)
+	}
+}
+
 func TestDeleteCodexKey_RequiresBaseURLWhenAPIKeyDuplicated(t *testing.T) {
 	t.Parallel()
 

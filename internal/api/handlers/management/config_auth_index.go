@@ -32,6 +32,11 @@ type xaiKeyWithAuthIndex struct {
 	AuthIndex string `json:"auth-index,omitempty"`
 }
 
+type devinKeyWithAuthIndex struct {
+	config.DevinKey
+	AuthIndex string `json:"auth-index,omitempty"`
+}
+
 type metaKeyWithAuthIndex struct {
 	config.MetaKey
 	AuthIndex string `json:"auth-index,omitempty"`
@@ -396,7 +401,7 @@ func (h *Handler) injectV8APIKeyAuthIndexesLocked(root *yaml.Node, data []byte) 
 	}
 
 	authByConfigIndex := make(map[string]map[string]*coreauth.Auth)
-	for _, p := range []string{"codex", "claude", "xai", "meta"} {
+	for _, p := range []string{"codex", "claude", "xai", "meta", "devin"} {
 		authByConfigIndex[p] = make(map[string]*coreauth.Auth)
 		for _, a := range authsByProvider[p] {
 			if a != nil && a.Attributes != nil {
@@ -500,7 +505,7 @@ func (h *Handler) injectV8APIKeyAuthIndexesLocked(root *yaml.Node, data []byte) 
 			continue
 		}
 
-		if providerName == "codex" || providerName == "xai" {
+		if providerName == "codex" || providerName == "xai" || providerName == "devin" {
 			validIdx := 0
 			for _, group := range groupsNode.Content {
 				if group == nil || group.Kind != yaml.MappingNode {
@@ -884,6 +889,39 @@ func (h *Handler) xaiKeysWithAuthIndex() []xaiKeyWithAuthIndex {
 		}
 		out[i] = xaiKeyWithAuthIndex{
 			XAIKey:    entry,
+			AuthIndex: authIndex,
+		}
+	}
+	return out
+}
+
+func (h *Handler) devinKeysWithAuthIndex() []devinKeyWithAuthIndex {
+	if h == nil {
+		return nil
+	}
+	liveIndexByID := h.liveAuthIndexByID()
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.cfg == nil {
+		return nil
+	}
+
+	idGen := synthesizer.NewStableIDGenerator()
+	out := make([]devinKeyWithAuthIndex, len(h.cfg.DevinKey))
+	for i := range h.cfg.DevinKey {
+		entry := h.cfg.DevinKey[i]
+		authIndex := ""
+		key := strings.TrimSpace(entry.APIKey)
+		base := strings.TrimSpace(entry.BaseURL)
+		proxyURL := strings.TrimSpace(entry.ProxyURL)
+		prefix := strings.TrimSpace(entry.Prefix)
+		if key != "" || base != "" {
+			id, _ := idGen.Next("devin:apikey", key, base, proxyURL, prefix, config.FormatSortedHeaders(entry.Headers))
+			authIndex = liveIndexByID[id]
+		}
+		out[i] = devinKeyWithAuthIndex{
+			DevinKey:  entry,
 			AuthIndex: authIndex,
 		}
 	}

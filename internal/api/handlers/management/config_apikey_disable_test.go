@@ -47,6 +47,34 @@ func TestToggleConfigAPIKeyExcludedAll_XAI(t *testing.T) {
 	}
 }
 
+func TestToggleConfigAPIKeyExcludedAll_Devin(t *testing.T) {
+	cfg := &config.Config{
+		DevinKey: []config.DevinKey{{
+			APIKey:  "devin-test",
+			BaseURL: "https://server.codeium.com",
+		}},
+	}
+	idGen := synthesizer.NewStableIDGenerator()
+	authID, _ := idGen.Next("devin:apikey", "devin-test", "https://server.codeium.com", "", "", "")
+	auth := &coreauth.Auth{
+		ID:       authID,
+		Provider: "devin",
+		Attributes: map[string]string{
+			"api_key":  "devin-test",
+			"base_url": "https://server.codeium.com",
+			"source":   "config:devin[abc]",
+		},
+	}
+
+	handled, errToggle := toggleConfigAPIKeyExcludedAll(cfg, auth, true)
+	if errToggle != nil || !handled {
+		t.Fatalf("toggle disable: handled=%v err=%v", handled, errToggle)
+	}
+	if len(cfg.DevinKey[0].ExcludedModels) != 1 || cfg.DevinKey[0].ExcludedModels[0] != "*" {
+		t.Fatalf("excluded-models = %#v, want [*]", cfg.DevinKey[0].ExcludedModels)
+	}
+}
+
 func TestToggleConfigAPIKeyExcludedAll_Meta(t *testing.T) {
 	cfg := &config.Config{
 		MetaKey: []config.MetaKey{{

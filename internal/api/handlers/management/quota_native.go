@@ -8,9 +8,11 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
+	devinauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/devin"
 	kiroauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/kiro"
 	mirasimauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/mirasim"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -23,12 +25,13 @@ import (
 const nativeQuotaTimeout = 15 * time.Second
 
 // nativeQuotaProviders lists the builtin providers with a native quota fetcher.
-var nativeQuotaProviders = []string{"kiro", "mirasim"}
+var nativeQuotaProviders = []string{"kiro", "mirasim", "devin"}
 
 // tryNativeQuotaFetch serves quota fetches for builtin providers that have no
 // quota endpoint in the plugin system: kiro via AWS CodeWhisperer usage API,
-// mirasim via the relay's /v1/limits. Returns handled=true when the provider
-// is builtin-supported (irrespective of success), so callers never fall
+// mirasim via the relay's /v1/limits, devin via the seat management
+// GetUserStatus RPC. Returns handled=true when the provider is
+// builtin-supported (irrespective of success), so callers never fall
 // through to plugins/probes for these providers.
 func (h *Handler) tryNativeQuotaFetch(c context.Context, auth *cliproxyauth.Auth) (pluginapi.QuotaFetchResponse, bool, error) {
 	if h == nil || auth == nil {
@@ -40,6 +43,8 @@ func (h *Handler) tryNativeQuotaFetch(c context.Context, auth *cliproxyauth.Auth
 		return h.fetchKiroQuota(c, auth)
 	case "mirasim":
 		return h.fetchMirasimQuota(c, auth)
+	case "devin":
+		return h.fetchDevinQuota(c, auth)
 	default:
 		return pluginapi.QuotaFetchResponse{}, false, nil
 	}
@@ -48,7 +53,7 @@ func (h *Handler) tryNativeQuotaFetch(c context.Context, auth *cliproxyauth.Auth
 // nativeQuotaSupported reports whether a provider has a builtin quota fetcher.
 func nativeQuotaSupported(provider string) bool {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "kiro", "mirasim":
+	case "kiro", "mirasim", "devin":
 		return true
 	default:
 		return false
@@ -112,6 +117,119 @@ func kiroTokenDataFromAuth(auth *cliproxyauth.Auth) *kiroauth.KiroTokenData {
 		data.RefreshToken = strings.TrimSpace(v)
 	}
 	return data
+}
+
+// devinDefaultServerURL mirrors helps.DevinDefaultBaseURL; kept local so the
+// management package does not gain a dependency edge on the executor helpers.
+const devinDefaultServerURL = "https://server.codeium.com"
+
+// fetchDevinQuota serves the devin native quota lane via the seat management
+// GetUserStatus RPC. Both credential kinds are served: config-synthesized
+// api-keys.devin entries (session token in Attributes) and OAuth auth files
+// (session token in Metadata), mirroring devinAuthCredentials in the executor.
+func (h *Handler) fetchDevinQuota(parentCtx context.Context, auth *cliproxyauth.Auth) (pluginapi.QuotaFetchResponse, bool, error) {
+	token, baseURL, deviceSeed := devinQuotaCredentials(auth)
+	if token == "" {
+		return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("devin: session token not found for credential")
+	}
+
+	proxyURL := strings.TrimSpace(auth.ProxyURL)
+	if proxyURL == "" && h != nil && h.cfg != nil {
+		proxyURL = strings.TrimSpace(h.cfg.ProxyURL)
+	}
+	httpClient := &http.Client{}
+	if proxyURL != "" {
+		parsed, errParse := url.Parse(proxyURL)
+		if errParse != nil {
+			return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("devin: invalid proxy url: %w", errParse)
+		}
+		httpClient.Transport = &http.Transport{Proxy: http.ProxyURL(parsed)}
+	}
+
+	ctx, cancel := context.WithTimeout(parentCtx, nativeQuotaTimeout)
+	defer cancel()
+
+	svc := devinauth.NewDevinAuthService(httpClient)
+	if baseURL != devinDefaultServerURL {
+		svc.SetServerBaseURL(baseURL)
+	}
+	status, err := svc.FetchUserStatus(ctx, token, deviceSeed)
+	if err != nil {
+		return pluginapi.QuotaFetchResponse{}, true, fmt.Errorf("devin user status: %w", err)
+	}
+
+	resp := pluginapi.QuotaFetchResponse{}
+	if plan := strings.TrimSpace(status.Plan); plan != "" {
+		resp.Subscription = &pluginapi.QuotaSubscription{Plan: plan}
+	}
+
+	buckets := []pluginapi.QuotaBucket{
+		devinQuotaBucket("daily", status.DailyQuotaRemainingPercent, status.DailyQuotaResetAt),
+		devinQuotaBucket("weekly", status.WeeklyQuotaRemainingPercent, status.WeeklyQuotaResetAt),
+	}
+	resp.Groups = []pluginapi.QuotaGroup{{DisplayName: "quota", Buckets: buckets}}
+	resp.Summary = []pluginapi.QuotaMetric{
+		{Key: "daily_quota_remaining", Label: "Daily quota remaining", Value: float64(status.DailyQuotaRemainingPercent), Unit: "%"},
+		{Key: "weekly_quota_remaining", Label: "Weekly quota remaining", Value: float64(status.WeeklyQuotaRemainingPercent), Unit: "%"},
+	}
+	return resp, true, nil
+}
+
+// devinQuotaCredentials extracts the devin session token, base URL, and
+// device seed from the credential, mirroring devinAuthCredentials in
+// internal/runtime/executor: Attributes first (api-key entries), Metadata
+// fallback (OAuth auth files).
+func devinQuotaCredentials(auth *cliproxyauth.Auth) (token, baseURL, deviceSeed string) {
+	baseURL = devinDefaultServerURL
+	if auth == nil {
+		return "", baseURL, ""
+	}
+	if auth.Attributes != nil {
+		for _, key := range []string{"api_key", "session_token", "token"} {
+			if v := strings.TrimSpace(auth.Attributes[key]); v != "" && token == "" {
+				token = v
+			}
+		}
+		if v := strings.TrimSpace(auth.Attributes["base_url"]); v != "" {
+			baseURL = v
+		}
+		deviceSeed = strings.TrimSpace(auth.Attributes["device_seed"])
+	}
+	if auth.Metadata != nil {
+		for _, key := range []string{"api_key", "session_token", "access_token"} {
+			if v, ok := auth.Metadata[key].(string); ok && strings.TrimSpace(v) != "" && token == "" {
+				token = strings.TrimSpace(v)
+			}
+		}
+		if v, ok := auth.Metadata["base_url"].(string); ok && strings.TrimSpace(v) != "" && baseURL == devinDefaultServerURL {
+			baseURL = strings.TrimSpace(v)
+		}
+		if v, ok := auth.Metadata["device_seed"].(string); ok && strings.TrimSpace(v) != "" && deviceSeed == "" {
+			deviceSeed = strings.TrimSpace(v)
+		}
+	}
+	return token, baseURL, deviceSeed
+}
+
+// devinQuotaBucket maps a quota window (remaining percent + reset instant)
+// onto a normalized bucket with the fraction clamped to [0,1].
+func devinQuotaBucket(window string, percent int64, resetAt time.Time) pluginapi.QuotaBucket {
+	fraction := float64(percent) / 100
+	if fraction < 0 {
+		fraction = 0
+	}
+	if fraction > 1 {
+		fraction = 1
+	}
+	bucket := pluginapi.QuotaBucket{
+		Window:            window,
+		RemainingFraction: fraction,
+		Description:       fmt.Sprintf("%s quota remaining %d%%", window, percent),
+	}
+	if !resetAt.IsZero() {
+		bucket.ResetTime = resetAt.UTC().Format(time.RFC3339)
+	}
+	return bucket
 }
 
 // fetchMirasimQuota calls {base-url}/v1/limits with the mirasim Bearer key and
