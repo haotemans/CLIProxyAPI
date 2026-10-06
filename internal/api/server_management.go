@@ -319,7 +319,7 @@ func (s *Server) pluginManagementNoRoute(c *gin.Context) {
 		return
 	}
 	if path != "/v0/management" && !strings.HasPrefix(path, "/v0/management/") {
-		c.AbortWithStatus(http.StatusNotFound)
+		s.servePanelFallback(c)
 		return
 	}
 	if s.pluginHost == nil || s.mgmt == nil {
@@ -390,4 +390,39 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 	}
 
 	c.File(filePath)
+}
+
+// servePanelFallback renders the management control panel for browser requests
+// that match no API route. It follows the new-api NoRoute pattern: explicit API
+// prefixes keep their 404 semantics, while any other GET/HEAD path (such as a
+// bookmarkless /) falls through to the panel. The panel handler itself applies
+// the Home/disabled-panel guards, so those modes keep their previous behavior.
+func (s *Server) servePanelFallback(c *gin.Context) {
+	if s == nil || c == nil || c.Request == nil {
+		if c != nil {
+			c.AbortWithStatus(http.StatusNotFound)
+		}
+		return
+	}
+	if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if isAPIPath(c.Request.URL.Path) {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	s.serveManagementControlPanel(c)
+}
+
+// isAPIPath reports whether a path belongs to the proxy/management API surface.
+// Unmatched paths under these prefixes must keep a plain 404 instead of being
+// swallowed by the panel fallback so clients get accurate API semantics.
+func isAPIPath(path string) bool {
+	for _, prefix := range []string{"/v1", "/v0", "/api", "/openai", "/v1beta", "/backend-api", "/v0/resource", "/mirasim"} {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return strings.HasSuffix(path, "/callback")
 }

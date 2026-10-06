@@ -128,17 +128,11 @@ func (s *Server) setupRoutes() {
 		v1beta.GET("/models/*action", s.geminiGetHandler(geminiHandlers))
 	}
 
-	// Root endpoint
-	s.engine.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "CLI Proxy API Server",
-			"endpoints": []string{
-				"POST /v1/chat/completions",
-				"POST /v1/completions",
-				"GET /v1/models",
-			},
-		})
-	})
+	// Root endpoint serves the management control panel. The API surface lives
+	// under explicit prefixes (/v1, /v1beta, /v0/management, ...); the example
+	// API-key safe-mode middleware still intercepts GET / ahead of this handler
+	// to show its warning page when template keys are configured.
+	s.engine.GET("/", s.serveManagementControlPanel)
 
 	// OAuth callback endpoints (reuse main server port)
 	// These endpoints receive provider redirects and persist
