@@ -7,6 +7,7 @@ import (
 	"time"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/providers"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
@@ -447,6 +448,16 @@ func configuredModelAliasEntries(cfg *internalconfig.Config, auth *Auth) []model
 	}
 	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
 	var models []modelAliasEntry
+	// Fast path: consult the providers registry before the hand-written switch.
+	// A miss simply falls through to the existing cases unmodified.
+	if spec, ok := providers.Lookup(provider); ok && spec.ResolveEntry != nil {
+		if re := spec.ResolveEntry(cfg, auth); re.HasEntry {
+			if aliasModels, ok := re.AliasModels.([]modelAliasEntry); ok {
+				return aliasModels
+			}
+			return nil
+		}
+	}
 	switch provider {
 	case "gemini":
 		if entry := resolveGeminiAPIKeyConfig(cfg, auth); entry != nil {
@@ -627,6 +638,20 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
 
 		byAlias := make(map[string]string)
 		provider := strings.ToLower(strings.TrimSpace(auth.Provider))
+		// Fast path: consult the providers registry before the hand-written switch.
+		// A hit is handled here; a miss falls through to the existing switch unchanged.
+		registryHandled := false
+		if spec, ok := providers.Lookup(provider); ok && spec.ResolveEntry != nil {
+			if re := spec.ResolveEntry(cfg, auth); re.HasEntry {
+				if aliasModels, ok := re.AliasModels.([]modelAliasEntry); ok {
+					compileAPIKeyModelAliasForModels(byAlias, aliasModels)
+				}
+				registryHandled = true
+			}
+		}
+		if registryHandled {
+			goto rebuildNext
+		}
 		switch provider {
 		case "gemini":
 			if entry := resolveGeminiAPIKeyConfig(cfg, auth); entry != nil {
@@ -691,6 +716,7 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
 			}
 		}
 
+	rebuildNext:
 		if len(byAlias) > 0 {
 			out[auth.ID] = byAlias
 		}
@@ -782,6 +808,20 @@ func (m *Manager) applyAPIKeyModelAliasWithRouting(routing *apiKeyModelRoutingSn
 	}
 
 	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
+	// Fast path: consult the providers registry before the hand-written switch.
+	// A hit resolves and returns here; a miss falls through to the existing
+	// switch unchanged.
+	if spec, ok := providers.Lookup(provider); ok && spec.ResolveEntry != nil {
+		if re := spec.ResolveEntry(cfg, auth); re.HasEntry {
+			if aliasModels, ok := re.AliasModels.([]modelAliasEntry); ok {
+				if resolved := resolveModelAliasFromConfigModels(requestedModel, aliasModels); resolved != "" {
+					return resolved
+				}
+				return requestedModel
+			}
+			return requestedModel
+		}
+	}
 	upstreamModel := ""
 	switch provider {
 	case "gemini":
@@ -825,6 +865,14 @@ type APIKeyConfigEntry interface {
 	GetBaseURL() string
 	GetPrefix() string
 	GetProxyURL() string
+}
+
+// ResolveAPIKeyConfigExported exposes the generic resolveAPIKeyConfig helper
+// so the providers-registry fast path (sdk/cliproxy, different package) can
+// pick an api-key config entry over a []T viewed through the []any indirection
+// without this package importing the registry.
+func ResolveAPIKeyConfigExported[T APIKeyConfigEntry](entries []T, auth *Auth) *T {
+	return resolveAPIKeyConfig(entries, auth)
 }
 
 func resolveAPIKeyConfig[T APIKeyConfigEntry](entries []T, auth *Auth) *T {
@@ -1129,4 +1177,30 @@ func asModelAliasEntries[T interface {
 		out = append(out, models[i])
 	}
 	return out
+}
+
+// Package-level exported pure wrappers so the providers-registry builtin
+// package (which may import coreauth but not its private identifiers) can
+// close over the generic model/alias joins while callers stay opaque. These
+// are zero-state, receiver-free pure functions; exporting them adds no new
+// behavior.
+
+// AsModelAliasEntriesExported is the exported form of asModelAliasEntries.
+func AsModelAliasEntriesExported[T interface {
+	GetName() string
+	GetAlias() string
+	GetForceMapping() bool
+}](models []T) []modelAliasEntry {
+	return asModelAliasEntries(models)
+}
+
+// ModelAliasEntryExported re-exposes the package-private modelAliasEntry
+// element type so external assemblers can hold and pass the rendered slice
+// without naming the interface directly.
+type ModelAliasEntryExported = modelAliasEntry
+
+// ResolveModelAliasFromConfigModelsExported is the exported form of
+// resolveModelAliasFromConfigModels.
+func ResolveModelAliasFromConfigModelsExported(requestedModel string, models []modelAliasEntry) string {
+	return resolveModelAliasFromConfigModels(requestedModel, models)
 }

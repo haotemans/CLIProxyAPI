@@ -7,6 +7,8 @@ import (
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/providers"
+	_ "github.com/router-for-me/CLIProxyAPI/v8/internal/providers/builtin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -288,6 +290,15 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
 		}
 		s.registerOpenAICompatProviderExecutor(compatProviderKey, a, cfg, forceReplace, false)
 		return
+	}
+	lowerProvider := strings.ToLower(strings.TrimSpace(a.Provider))
+	// Fast path: consult the providers registry before the hand-written switch.
+	// A miss simply falls through to the existing cases unmodified.
+	if spec, ok := providers.Lookup(lowerProvider); ok && spec.NewExecutor != nil {
+		if exec, ok := spec.NewExecutor(providers.ExecutorRequest{Cfg: cfg}).(coreauth.ProviderExecutor); ok && exec != nil {
+			s.coreManager.RegisterExecutor(exec)
+			return
+		}
 	}
 	switch strings.ToLower(a.Provider) {
 	case constant.Gemini:

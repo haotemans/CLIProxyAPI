@@ -765,6 +765,20 @@ func (k CodexKey) GetPrefix() string { return k.Prefix }
 
 func (k CodexKey) GetProxyURL() string { return k.ProxyURL }
 
+// GetConfigModels exposes the config-listed models as []any so the
+// providers-registry layer can hand them to a channel's BuildConfigModels
+// hook without naming the concrete CodexModel type at the call site.
+func (k CodexKey) GetConfigModels() []any {
+	if len(k.Models) == 0 {
+		return nil
+	}
+	out := make([]any, 0, len(k.Models))
+	for _, model := range k.Models {
+		out = append(out, model)
+	}
+	return out
+}
+
 // CodexModel describes a mapping between an alias and the actual upstream model name.
 type CodexModel struct {
 	// Name is the upstream model identifier used when issuing requests.
