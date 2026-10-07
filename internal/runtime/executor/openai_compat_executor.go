@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	opencode "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/opencode"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
@@ -146,6 +147,15 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 
 	url := strings.TrimSuffix(baseURL, "/") + endpoint
 	translated = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", translated, originalTranslated, requestedModel, requestPath, opts.Headers)
+	// Free-tier channel enforcement (opencode Zen anonymous tier): after the
+	// payload-config barrier, rewrite the FINAL business payload and headers
+	// into the opencode CLI fingerprint. Nothing below this point may touch
+	// business semantics; only header identity and the SSE aggregation of the
+	// forced stream response follow, which is the barrier's transport layer.
+	zenFree := opencode.IsZenFreeFingerprintAuth(e.provider, apiKey)
+	if zenFree {
+		translated = opencode.ApplyZenFreePayloadEnforcement(translated)
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(translated))
 	if err != nil {
 		return resp, err
@@ -160,6 +170,15 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	if zenFree {
+		// Last-writer-wins so neither user-configured nor client-supplied
+		// headers can displace the free-tier fingerprint the sink validates.
+		opencode.ApplyZenFreeFingerprintHeaders(ctx, httpReq)
+		// The anonymous tier only speaks SSE; ask for it explicitly even
+		// though the client asked for a non-stream response.
+		httpReq.Header.Set("Accept", "text/event-stream")
+		httpReq.Header.Set("Cache-Control", "no-cache")
+	}
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
@@ -204,6 +223,20 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 		return resp, err
 	}
 	helps.AppendAPIResponseChunk(ctx, e.cfg, body)
+	if zenFree {
+		// The anonymous tier answered with an SSE stream (we forced
+		// stream:true); fold the chunks into one non-stream chat.completion
+		// that the downstream translators can handle. This replaces the
+		// body, so ParseOpenAIUsage/ObserveResponseModel below see the
+		// assembled JSON, keeping accounting identical to a real non-stream
+		// response.
+		body, err = helps.AggregateOpenAISTreamChunks(bytes.NewReader(body), baseModel, time.Now().Unix())
+		if err != nil {
+			helps.RecordAPIResponseError(ctx, e.cfg, err)
+			err = statusErr{code: http.StatusBadGateway, msg: fmt.Sprintf("zen free tier stream aggregation failed: %v", err)}
+			return resp, err
+		}
+	}
 	body = reasoningBackfillForProvider(e.provider, body)
 	reporter.ObserveResponseModel(body)
 	// Ensure we at least record the request even if upstream doesn't return usage
@@ -262,6 +295,9 @@ func (e *OpenAICompatExecutor) executeImages(ctx context.Context, auth *cliproxy
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	// No zen-free fingerprint on images: the anonymous tier only exposes
+	// *-free chat/completions models, so free credentials never reach this
+	// branch, and the CLI fingerprint would mislabel these calls upstream.
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
@@ -369,6 +405,14 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 
 	url := strings.TrimSuffix(baseURL, "/") + "/chat/completions"
 	translated = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", translated, originalTranslated, requestedModel, requestPath, opts.Headers)
+	// Free-tier channel enforcement (opencode Zen anonymous tier), same rule
+	// as Execute: bash/read tools must ride along on every upstream call even
+	// for stream requests, and the final payload is rewritten only after the
+	// payload-config barrier.
+	zenFree := opencode.IsZenFreeFingerprintAuth(e.provider, apiKey)
+	if zenFree {
+		translated = opencode.ApplyZenFreePayloadEnforcement(translated)
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(translated))
 	if err != nil {
 		return nil, err
@@ -385,6 +429,10 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
 	httpReq.Header.Set("Accept", "text/event-stream")
 	httpReq.Header.Set("Cache-Control", "no-cache")
+	if zenFree {
+		// Last-writer-wins: fingerprint headers must survive user headers.
+		opencode.ApplyZenFreeFingerprintHeaders(ctx, httpReq)
+	}
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
@@ -654,6 +702,8 @@ func (e *OpenAICompatExecutor) executeImagesStream(ctx context.Context, auth *cl
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	// No zen-free fingerprint on images (same reasoning as executeImages):
+	// the anonymous tier only serves chat/completions *-free models.
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
