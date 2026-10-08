@@ -112,6 +112,7 @@ export function AuthFilesPage() {
     modelsList,
     modelsFileName,
     modelsFileType,
+    modelsFileAuthIndex,
     modelsError,
     showModels,
     closeModelsModal,
@@ -704,7 +705,7 @@ export function AuthFilesPage() {
                 >
                   {t('auth_files.upload_button')}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/oauth')}>
+                <Button variant="secondary" size="sm" onClick={() => navigate('/oauth')}>
                   {t('auth_files.empty_oauth_link')}
                 </Button>
               </div>
@@ -815,6 +816,7 @@ export function AuthFilesPage() {
         open={modelsModalOpen}
         fileName={modelsFileName}
         fileType={modelsFileType}
+        authIndex={modelsFileAuthIndex || undefined}
         loading={modelsLoading}
         error={modelsError}
         models={modelsList}

@@ -186,27 +186,29 @@ export function AuthFilesToolbar(props: AuthFilesToolbarProps) {
         )}
       </div>
 
-      {onInspect && inspectionLabel && (
+      <div className={styles.tailActions}>
+        {onInspect && inspectionLabel && (
+          <button
+            type="button"
+            className={styles.inspectAction}
+            onClick={onInspect}
+            disabled={inspectionDisabled || inspectionLoading}
+          >
+            {inspectionLoading ? <LoadingSpinner size={13} /> : <IconShield size={14} />}
+            {inspectionLabel}
+          </button>
+        )}
+
         <button
           type="button"
-          className={styles.inspectAction}
-          onClick={onInspect}
-          disabled={inspectionDisabled || inspectionLoading}
+          className={styles.deleteAction}
+          onClick={onDelete}
+          disabled={deleteDisabled}
         >
-          {inspectionLoading ? <LoadingSpinner size={13} /> : <IconShield size={14} />}
-          {inspectionLabel}
+          {deleteLoading ? <LoadingSpinner size={13} /> : <IconTrash2 size={14} />}
+          {deleteLabel}
         </button>
-      )}
-
-      <button
-        type="button"
-        className={styles.deleteAction}
-        onClick={onDelete}
-        disabled={deleteDisabled}
-      >
-        {deleteLoading ? <LoadingSpinner size={13} /> : <IconTrash2 size={14} />}
-        {deleteLabel}
-      </button>
+      </div>
     </div>
   );
 }

@@ -433,6 +433,12 @@
     "probe_provider_blocked_hint": "Cline ужесточает сторонний доступ (периодически)",
     "model_test_run": "Тест",
     "model_test_running": "Проверка…",
+    "model_test_status_usable": "доступна",
+    "model_test_status_not_available": "недоступна",
+    "model_test_status_limited": "ограничена",
+    "model_test_status_auth_error": "ошибка аутентификации",
+    "model_test_status_provider_blocked": "заблокирована провайдером",
+    "model_test_status_unreachable": "недостижима",
     "models_free_badge": "бесплатно"
   },
   "antigravity_subscription": {

@@ -178,6 +178,7 @@ export const canTestModelProvider = (provider: string | undefined | null): boole
 export interface ModelTestOutcome {
   state: 'running' | 'done';
   ok?: boolean;
+  /** /model-test 业务探测状态；usable 视为等价 ok=true。 */
   status?: string;
   error?: string;
   reply_text?: string;
@@ -187,7 +188,21 @@ export interface ModelTestOutcome {
 export interface ModelTestResultView {
   tone: 'running' | 'ok' | 'error';
   text: string;
+  /** 探测状态词（usable/not_available/...），用于徽标着色。 */
+  status?: string;
 }
+
+/** 单模型测试状态词的收敛展示：5 种业务状态对应 3 个展示层级。
+ *  usable → ok；limited/not_available → limited（警示）；
+ *  auth_error / provider_blocked / unreachable / 其它 → error。 */
+export const MODEL_TEST_STATUS_TEXT_KEYS: Record<string, string> = {
+  usable: 'auth_files.model_test_status_usable',
+  not_available: 'auth_files.model_test_status_not_available',
+  limited: 'auth_files.model_test_status_limited',
+  auth_error: 'auth_files.model_test_status_auth_error',
+  provider_blocked: 'auth_files.model_test_status_provider_blocked',
+  unreachable: 'auth_files.model_test_status_unreachable',
+};
 
 /** Inline result line for one model row: muted running label, green reply +
  * latency on success, red status/error otherwise. Null when never run. */
@@ -197,14 +212,16 @@ export const modelTestResultView = (
 ): ModelTestResultView | null => {
   if (!outcome) return null;
   if (outcome.state === 'running') return { tone: 'running', text: runningLabel };
-  if (outcome.ok) {
+  const status = (outcome.status ?? '').trim().toLowerCase();
+  const usable = outcome.ok === true || status === 'usable';
+  if (usable) {
     const reply = (outcome.reply_text ?? '').trim() || '—';
     const latency =
       typeof outcome.latency_ms === 'number' && Number.isFinite(outcome.latency_ms)
         ? ` · ${Math.round(outcome.latency_ms)} ms`
         : '';
-    return { tone: 'ok', text: reply + latency };
+    return { tone: 'ok', text: reply + latency, status: 'usable' };
   }
-  const prefix = (outcome.status ?? '').trim() ? `${(outcome.status ?? '').trim()}: ` : '';
-  return { tone: 'error', text: prefix + (outcome.error ?? '').trim() };
+  const errText = (outcome.error ?? '').trim();
+  return { tone: 'error', text: errText, status: status || undefined };
 };

@@ -56,12 +56,15 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
 }
 
+/* 首凭证空态：主（上传）+ 次（去 OAuth 登录）两个动作横向与文案同一条视觉中心线，
+   且按钮尺寸/风格与其它页面一致（btn sm：10px 14px、radius-md）。
+   小屏下 empty-state 已自身转列；此处保持自然排布的右对齐即可。 */
 .emptyActions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 /* ---------- 分页 ---------- */

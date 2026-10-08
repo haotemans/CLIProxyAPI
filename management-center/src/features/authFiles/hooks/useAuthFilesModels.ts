@@ -13,6 +13,8 @@ export type UseAuthFilesModelsResult = {
   modelsList: AuthFileModelItem[];
   modelsFileName: string;
   modelsFileType: string;
+  /** 当前打开模型的凭证 auth_index；model-test 探测端点按其寻址。 */
+  modelsFileAuthIndex: string;
   modelsError: ModelsError;
   showModels: (item: AuthFileItem) => Promise<void>;
   closeModelsModal: () => void;
@@ -29,6 +31,7 @@ export function useAuthFilesModels(): UseAuthFilesModelsResult {
   const [modelsList, setModelsList] = useState<AuthFileModelItem[]>([]);
   const [modelsFileName, setModelsFileName] = useState('');
   const [modelsFileType, setModelsFileType] = useState('');
+  const [modelsFileAuthIndex, setModelsFileAuthIndex] = useState('');
   const [modelsError, setModelsError] = useState<ModelsError>(null);
   const modelsCacheRef = useRef<Map<string, AuthFileModelItem[]>>(new Map());
   const modelsCacheVersionRef = useRef(0);
@@ -61,6 +64,7 @@ export function useAuthFilesModels(): UseAuthFilesModelsResult {
 
       setModelsFileName(item.name);
       setModelsFileType(item.type || '');
+      setModelsFileAuthIndex(typeof item.authIndex === 'string' ? item.authIndex : '');
       setModelsList([]);
       setModelsError(null);
       setModelsModalOpen(true);
@@ -111,6 +115,7 @@ export function useAuthFilesModels(): UseAuthFilesModelsResult {
     modelsList,
     modelsFileName,
     modelsFileType,
+    modelsFileAuthIndex,
     modelsError,
     showModels,
     closeModelsModal,

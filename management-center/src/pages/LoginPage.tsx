@@ -126,6 +126,24 @@ export function LoginPage() {
 
   useEffect(() => {
     const init = async () => {
+      // 开发辅助：允许通过 URL 参数 ?api-base=&key= 预填并自动登录，便于 dev server 快速进入页面
+      const params = new URLSearchParams(window.location.search);
+      const presetBase = params.get('api-base');
+      const presetKey = params.get('key');
+
+      if (presetKey) {
+        const baseToUse = presetBase ? normalizeApiBase(presetBase) : detectedBase;
+        setLoading(true);
+        try {
+          await login({ apiBase: baseToUse, managementKey: presetKey, rememberPassword: true });
+        } catch {
+          // 预填登录失败则落回手动表单
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         const autoLoggedIn = await restoreSession();
         if (autoLoggedIn) {
@@ -136,7 +154,12 @@ export function LoginPage() {
             navigate(redirect, { replace: true });
           }, 1500);
         } else {
-          setApiBase(storedBase || detectedBase);
+          if (presetBase) {
+            setApiBase(normalizeApiBase(presetBase));
+            setShowCustomBase(true);
+          } else {
+            setApiBase(storedBase || detectedBase);
+          }
           setManagementKey(storedKey || '');
           setRememberPassword(storedRememberPassword || Boolean(storedKey));
         }

@@ -8,6 +8,7 @@ import { isModelExcluded } from '@/features/authFiles/constants';
 import { modelProbeApi } from '@/features/authFiles/modelProbe/api';
 import {
   canTestModelProvider,
+  MODEL_TEST_STATUS_TEXT_KEYS,
   modelTestResultView,
   type ModelTestOutcome,
 } from '@/features/authFiles/modelProbe/logic';
@@ -17,6 +18,8 @@ export type AuthFileModelsModalProps = {
   open: boolean;
   fileName: string;
   fileType: string;
+  /** 当前凭证的 auth_index；有此值即启用「单模型测试」入口（POST /model-test）。 */
+  authIndex?: string;
   loading: boolean;
   error: 'unsupported' | null;
   models: AuthFileModelItem[];
@@ -27,19 +30,30 @@ export type AuthFileModelsModalProps = {
 
 export function AuthFileModelsModal(props: AuthFileModelsModalProps) {
   const { t } = useTranslation();
-  const { open, fileName, fileType, loading, error, models, excluded, onClose, onCopyText } = props;
+  const {
+    open,
+    fileName,
+    fileType,
+    authIndex,
+    loading,
+    error,
+    models,
+    excluded,
+    onClose,
+    onCopyText,
+  } = props;
 
   const [tests, setTests] = useState<Record<string, ModelTestOutcome>>({});
   useEffect(() => {
     setTests({});
   }, [fileName, open]);
 
-  const canTest = canTestModelProvider(fileType);
+  const canTest = canTestModelProvider(fileType) && Boolean(authIndex);
   const runTest = async (modelId: string) => {
-    if (!fileName || tests[modelId]?.state === 'running') return;
+    if (!authIndex || tests[modelId]?.state === 'running') return;
     setTests((prev) => ({ ...prev, [modelId]: { state: 'running' } }));
     try {
-      const response = await modelProbeApi.testModel(fileName, modelId);
+      const response = await modelProbeApi.testModelByIndex(authIndex, modelId);
       setTests((prev) => ({ ...prev, [modelId]: { state: 'done', ...response } }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -121,6 +135,17 @@ export function AuthFileModelsModal(props: AuthFileModelsModalProps) {
                 {excludedModel && (
                   <span className={styles.excludedBadge}>
                     {t('auth_files.models_excluded_badge', { defaultValue: '已禁用' })}
+                  </span>
+                )}
+                {result?.status && (
+                  <span
+                    className={`${styles.testStatus} ${
+                      result.status === 'usable'
+                        ? styles.testStatusUsable
+                        : styles.testStatusError
+                    }`}
+                  >
+                    {t(MODEL_TEST_STATUS_TEXT_KEYS[result.status] ?? result.status)}
                   </span>
                 )}
                 {result && (

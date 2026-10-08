@@ -54,6 +54,9 @@ export interface ModelTestResponse {
   latency_ms?: number;
   reply_text?: string;
   error?: string;
+  /** /model-test(oauth probe) 专用：业务侧探测结果的状态词 + 检测时刻。 */
+  provider?: string;
+  checked_ms?: number;
   usage?: { input?: number; output?: number };
 }
 
@@ -74,6 +77,15 @@ export const modelProbeApi = {
     apiClient.post<ModelTestResponse>(
       '/auth-files/test-model',
       { auth_file: authFile, model },
+      signal ? { signal } : undefined
+    ),
+
+  /** 按 auth_index 调用后端探测端点：返回统一状态词（usable/not_available/...），
+   *  供凭证卡模型行就地展示「单模型测试」结果。 */
+  testModelByIndex: (authIndex: string, model: string, signal?: AbortSignal): Promise<ModelTestResponse> =>
+    apiClient.post<ModelTestResponse>(
+      '/model-test',
+      { auth_index: authIndex, model },
       signal ? { signal } : undefined
     ),
 };

@@ -43,6 +43,24 @@ export default defineConfig({
       removeViteModuleLoader: true
     })
   ],
+  server: {
+    // 开发时把管理 API 代理到真实实例，避免 CORS 限制。
+    // 可用环境变量 CPA_DEV_PROXY_TARGET 覆盖（默认指向本机 8317 官方开发口）。
+    proxy: {
+      '/v0': {
+        target: process.env.CPA_DEV_PROXY_TARGET || 'http://127.0.0.1:8317',
+        changeOrigin: true,
+        secure: false,
+        // 引擎依据客户端 Referer 判定管理面板归属；转发到实例的 Referer 必须指向其自身路径
+        configure: (proxy) => {
+          const target = process.env.CPA_DEV_PROXY_TARGET || 'http://127.0.0.1:8317';
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('referer', `${target}/management.html`);
+          });
+        },
+      },
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(getVersion())
   },

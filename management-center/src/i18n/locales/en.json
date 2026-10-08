@@ -430,6 +430,12 @@
     "probe_provider_blocked_hint": "Cline is tightening third-party access (recurring phase)",
     "model_test_run": "Test",
     "model_test_running": "Testing…",
+    "model_test_status_usable": "usable",
+    "model_test_status_not_available": "not available",
+    "model_test_status_limited": "limited",
+    "model_test_status_auth_error": "auth error",
+    "model_test_status_provider_blocked": "provider blocked",
+    "model_test_status_unreachable": "unreachable",
     "models_free_badge": "free"
   },
   "antigravity_subscription": {

@@ -428,6 +428,12 @@
     "probe_provider_blocked_hint": "Cline 正在收紧第三方访问（周期性）",
     "model_test_run": "测试",
     "model_test_running": "测试中…",
+    "model_test_status_usable": "可用",
+    "model_test_status_not_available": "不可用",
+    "model_test_status_limited": "受限",
+    "model_test_status_auth_error": "认证错误",
+    "model_test_status_provider_blocked": "供应商封锁",
+    "model_test_status_unreachable": "不可达",
     "models_free_badge": "免费"
   },
   "antigravity_subscription": {

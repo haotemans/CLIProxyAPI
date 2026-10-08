@@ -113,6 +113,32 @@
   flex-shrink: 0;
 }
 
+/* 列表行内的编辑按钮：与 credentials 工具栏按钮一致的安静描边风，
+   ghost 隐藏填充但保留边框，与删除提供商同高同圆角。 */
+.editGhost {
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-hover) !important;
+    background: var(--bg-tertiary) !important;
+  }
+}
+
+/* 危险破坏性动作（删除提供商）与工具栏巡检/删除全部同族：无填充的安静描边，
+   不再用实心大红块——与其它按钮同高同圆角。 */
+.dangerGhost {
+  background: transparent !important;
+  border-color: var(--destructive-30) !important;
+  color: var(--danger-color) !important;
+
+  &:hover:not(:disabled) {
+    background: var(--destructive-10) !important;
+    border-color: var(--destructive-30) !important;
+    color: var(--danger-color) !important;
+  }
+}
+
 /* ---------- 别名图谱区 ---------- */
 
 .aliasChartSection {
