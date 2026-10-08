@@ -115,6 +115,16 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 		return e.jevExecute(ctx, auth, req, opts, reporter, baseURL, apiKey, baseModel)
 	}
 
+	// muse contributor models on the anonymous Zen tier live on /responses
+	// and speak the OpenAI Responses protocol. Mutually exclusive with the jev
+	// branch (prefix/marker sets do not overlap) and with the chat free tier:
+	// a muse id only reaches here when the credential is free, and every
+	// non-muse id falls through to the unchanged chat path below. Chat-format
+	// callers are refused with a 400 instead of being silently mistranslated.
+	if opencode.IsZenMuseContributorModelID(baseModel) && opencode.IsZenFreeFingerprintAuth(e.provider, apiKey) {
+		return e.museExecute(ctx, auth, req, opts, reporter, baseURL, apiKey, baseModel)
+	}
+
 	from := opts.SourceFormat
 	responseFormat := cliproxyexecutor.ResponseFormatOrSource(opts)
 	to := sdktranslator.FromString("openai")
@@ -386,6 +396,11 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 	// ride upstream here.
 	if opencode.IsZenJevModelID(baseModel) && opencode.IsZenFreeFingerprintAuth(e.provider, apiKey) {
 		return e.jevExecuteStream(ctx, auth, req, opts, reporter, baseURL, apiKey, baseModel)
+	}
+
+	// muse contributor split: same trigger as Execute, streaming view.
+	if opencode.IsZenMuseContributorModelID(baseModel) && opencode.IsZenFreeFingerprintAuth(e.provider, apiKey) {
+		return e.museExecuteStream(ctx, auth, req, opts, reporter, baseURL, apiKey, baseModel)
 	}
 
 	from := opts.SourceFormat
@@ -1449,6 +1464,218 @@ func openAICompatRetryAfter(status int, headers http.Header, body []byte, now ti
 		return &delay
 	}
 	return nil
+}
+
+// museExecute runs the non-stream path for muse contributor models against
+// /responses. Like jevExecute the payload-config barrier is skipped on
+// purpose: this split converts nothing — the client-supplied body already IS
+// the final upstream business payload (the request arrived on a /responses
+// route), so there is no translated form for user payload rules to target.
+// The anonymous-tier enforcement (stream:true + bash/read Responses stubs)
+// and the CLI fingerprint are the only rewrites, mirroring the chat free
+// tier, and the upstream's streamed Responses events are folded into one
+// terminal response object (the Responses counterpart of the chat free
+// tier's AggregateOpenAISTreamChunks fold).
+func (e *OpenAICompatExecutor) museExecute(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, reporter *helps.UsageReporter, baseURL, apiKey, baseModel string) (cliproxyexecutor.Response, error) {
+	if errRefuse := zenMuseRefuseNonResponses(opts, baseModel); errRefuse != nil {
+		return cliproxyexecutor.Response{}, errRefuse
+	}
+	payload, httpReq, errBuild := e.buildZenMuseRequest(ctx, auth, req, opts, baseURL, apiKey, baseModel)
+	if errBuild != nil {
+		return cliproxyexecutor.Response{}, errBuild
+	}
+	upstreamBody, respHeaders, errRound := e.doZenMuseRoundTrip(ctx, auth, httpReq, payload)
+	if errRound != nil {
+		return cliproxyexecutor.Response{}, errRound
+	}
+	final, errAggregate := opencode.AggregateZenMuseResponsesStream(bytes.NewReader(upstreamBody), nil)
+	if errAggregate != nil {
+		helps.RecordAPIResponseError(ctx, e.cfg, errAggregate)
+		return cliproxyexecutor.Response{}, statusErr{code: http.StatusBadGateway, msg: fmt.Sprintf("zen muse responses stream aggregation failed: %v", errAggregate)}
+	}
+	reporter.ObserveResponseModel(final)
+	final = helps.EnsureResponsesUsageDetails(final)
+	inputTokens, outputTokens, _ := opencode.ParseZenMuseResponsesUsage(final)
+	reporter.Publish(ctx, usage.Detail{
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+		TotalTokens:  inputTokens + outputTokens,
+	})
+	respHeaders = respHeaders.Clone()
+	respHeaders.Set("Content-Type", "application/json")
+	return cliproxyexecutor.Response{Payload: final, Headers: respHeaders}, nil
+}
+
+// museExecuteStream is the streaming twin of museExecute: the upstream SSE is
+// buffered once (the zen /responses stream is replayed byte-identical to the
+// client, since its event frames already carry "type" fields), malformed
+// frames are rejected, and the channel closes right after the terminal
+// response.completed event instead of waiting for the upstream socket to
+// close. Truncated streams surface a 502 at the [DONE] position.
+func (e *OpenAICompatExecutor) museExecuteStream(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, reporter *helps.UsageReporter, baseURL, apiKey, baseModel string) (_ *cliproxyexecutor.StreamResult, err error) {
+	if errRefuse := zenMuseRefuseNonResponses(opts, baseModel); errRefuse != nil {
+		return nil, errRefuse
+	}
+	payload, httpReq, errBuild := e.buildZenMuseRequest(ctx, auth, req, opts, baseURL, apiKey, baseModel)
+	if errBuild != nil {
+		return nil, errBuild
+	}
+	upstreamBody, respHeaders, errRound := e.doZenMuseRoundTrip(ctx, auth, httpReq, payload)
+	if errRound != nil {
+		return nil, errRound
+	}
+	var raw bytes.Buffer
+	final, errAggregate := opencode.AggregateZenMuseResponsesStream(bytes.NewReader(upstreamBody), &raw)
+
+	out := make(chan cliproxyexecutor.StreamChunk)
+	go func() {
+		defer close(out)
+		defer reporter.EnsurePublished(ctx)
+		if errAggregate != nil {
+			logged := statusErr{code: http.StatusBadGateway, msg: fmt.Sprintf("zen muse responses stream failed: %v", errAggregate)}
+			helps.RecordAPIResponseError(ctx, e.cfg, logged)
+			reporter.PublishFailure(ctx, logged)
+			select {
+			case out <- cliproxyexecutor.StreamChunk{Err: logged}:
+			case <-ctx.Done():
+			}
+			return
+		}
+		reporter.ObserveResponseModel(final)
+		for _, frame := range bytes.SplitAfter(raw.Bytes(), []byte("\n\n")) {
+			trimmed := bytes.TrimSpace(frame)
+			if len(trimmed) == 0 {
+				continue
+			}
+			eventEnded := bytes.HasPrefix(trimmed, []byte("event: response.completed")) ||
+				bytes.HasPrefix(trimmed, []byte("event: response.incomplete")) ||
+				bytes.HasPrefix(trimmed, []byte("event: response.failed"))
+			chunk := bytes.Clone(trimmed)
+			if eventEnded {
+				// The zen stream ends at the terminal typed event; some zen
+				// tiers omit both the "event:" field on later frames and the
+				// [DONE] sentinel, so close the client stream deterministically.
+				chunk = append(chunk, []byte("\ndata: [DONE]")...)
+			}
+			select {
+			case out <- cliproxyexecutor.StreamChunk{Payload: chunk}:
+			case <-ctx.Done():
+				return
+			}
+			if eventEnded {
+				break
+			}
+		}
+		inputTokens, outputTokens, _ := opencode.ParseZenMuseResponsesUsage(final)
+		reporter.Publish(ctx, usage.Detail{
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+			TotalTokens:  inputTokens + outputTokens,
+		})
+	}()
+	return &cliproxyexecutor.StreamResult{Headers: respHeaders, Chunks: out}, nil
+}
+
+// zenMuseRefuseNonResponses rejects chat-protocol callers with an explicit
+// 400 instead of letting the request die upstream with an opaque error (e.g.
+// a chat channel pointed at the muse model family by mistake). Claude and
+// Gemini surfaces are not refused here: they arrive as Responses-shaped
+// payloads after the router's own translation.
+func zenMuseRefuseNonResponses(opts cliproxyexecutor.Options, baseModel string) error {
+	from := opts.SourceFormat
+	if from == sdktranslator.FormatOpenAIResponse || from == sdktranslator.FormatCodex || from == sdktranslator.FormatAntigravity {
+		return nil
+	}
+	return statusErr{code: http.StatusBadRequest, msg: fmt.Sprintf("model %q requires the OpenAI Responses protocol on the anonymous OpenCode Zen tier (source format %q)\n\n%s",
+		baseModel, from.String(), opencode.ZenMuseContractExample)}
+}
+
+// buildZenMuseRequest applies the anonymous-tier enforcement to the client's
+// Responses payload and builds the authenticated, fingerprinted upstream
+// request. No translator runs here: the body is forwarded as authored plus
+// stream:true, the requested model id, and the bash/read Responses tool
+// stubs.
+func (e *OpenAICompatExecutor) buildZenMuseRequest(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, baseURL, apiKey, baseModel string) ([]byte, *http.Request, error) {
+	if !gjson.ValidBytes(req.Payload) || !gjson.ParseBytes(req.Payload).IsObject() {
+		return nil, nil, statusErr{code: http.StatusBadRequest, msg: fmt.Sprintf("zen muse: request payload must be a valid OpenAI Responses JSON object\n\n%s", opencode.ZenMuseContractExample)}
+	}
+	// Pin the requested id: a model alias resolved by the router must not
+	// leak upstream on the anonymous tier.
+	payload := helps.SetStringIfDifferent(req.Payload, "model", baseModel)
+	payload = opencode.ApplyZenMuseResponsesEnforcement(payload)
+
+	url := strings.TrimSuffix(baseURL, "/") + opencode.ZenMuseResponsesPath
+	httpReq, errNew := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if errNew != nil {
+		return nil, nil, errNew
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	httpReq.Header.Set("User-Agent", "cli-proxy-openai-compat")
+	var attrs map[string]string
+	if auth != nil {
+		attrs = auth.Attributes
+	}
+	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	// Last-writer-wins, exactly the chat free-tier rule: the zen sink rejects
+	// requests that do not look like the opencode CLI.
+	opencode.ApplyZenFreeFingerprintHeaders(ctx, httpReq)
+	// The anonymous tier only speaks SSE; the non-stream Execute view is
+	// folded back from this stream downstream.
+	httpReq.Header.Set("Accept", "text/event-stream")
+	httpReq.Header.Set("Cache-Control", "no-cache")
+	return payload, httpReq, nil
+}
+
+// doZenMuseRoundTrip executes the annotated /responses call and returns the
+// raw upstream body, folding transport and status failures into the same
+// status error semantics the other compat paths use. The whole body is read
+// before returning: the zen /responses stream can hang open after its last
+// frame, and the muse paths must never block on the upstream socket.
+func (e *OpenAICompatExecutor) doZenMuseRoundTrip(ctx context.Context, auth *cliproxyauth.Auth, httpReq *http.Request, payload []byte) ([]byte, http.Header, error) {
+	var authID, authLabel, authType, authValue string
+	if auth != nil {
+		authID = auth.ID
+		authLabel = auth.Label
+		authType, authValue = auth.AccountInfo()
+	}
+	helps.RecordAPIRequest(ctx, e.cfg, helps.UpstreamRequestLog{
+		URL:       httpReq.URL.String(),
+		Method:    http.MethodPost,
+		Headers:   httpReq.Header.Clone(),
+		Body:      payload,
+		Provider:  e.Identifier(),
+		AuthID:    authID,
+		AuthLabel: authLabel,
+		AuthType:  authType,
+		AuthValue: authValue,
+	})
+
+	httpClient := helps.NewProxyAwareHTTPClient(ctx, e.cfg, auth, 0)
+	httpResp, err := httpClient.Do(httpReq)
+	if err != nil {
+		helps.RecordAPIResponseError(ctx, e.cfg, err)
+		return nil, nil, err
+	}
+	defer func() {
+		if errClose := httpResp.Body.Close(); errClose != nil {
+			log.Errorf("openai compat executor: close muse response body error: %v", errClose)
+		}
+	}()
+	helps.RecordAPIResponseMetadata(ctx, e.cfg, httpResp.StatusCode, httpResp.Header.Clone())
+	respBody, errRead := io.ReadAll(httpResp.Body)
+	if errRead != nil {
+		helps.RecordAPIResponseError(ctx, e.cfg, errRead)
+		return nil, nil, errRead
+	}
+	helps.AppendAPIResponseChunk(ctx, e.cfg, respBody)
+	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+		helps.LogWithRequestID(ctx).Debugf("zen muse responses error, status: %d, message: %s", httpResp.StatusCode, helps.SummarizeErrorBody(httpResp.Header.Get("Content-Type"), respBody))
+		return nil, nil, newOpenAICompatStatusError(httpResp.StatusCode, httpResp.Header, respBody)
+	}
+	return respBody, httpResp.Header.Clone(), nil
 }
 
 // SupportsApplyPatch reports the actual executor contract, independent of its provider name.
