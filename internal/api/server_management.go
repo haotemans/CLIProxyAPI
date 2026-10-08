@@ -109,6 +109,7 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.POST("/usage-meters/pricing/sync-litellm", s.mgmt.SyncUsageMetersPricing)
 		mgmt.GET("/model-probe/status", s.mgmt.GetModelProbeStatus)
 		mgmt.POST("/model-probe/run", s.mgmt.PostModelProbeRun)
+		mgmt.POST("/model-test", s.mgmt.PostModelTest)
 		mgmt.GET("/distribution-keys", s.mgmt.GetDistributionKeys)
 		mgmt.POST("/distribution-keys", s.mgmt.PostDistributionKey)
 		mgmt.PUT("/distribution-keys", s.mgmt.PutDistributionKey)
