@@ -16,12 +16,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	opencode "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/opencode"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
@@ -102,6 +104,17 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 		return
 	}
 
+	// jev structured-evaluation models on the anonymous Zen tier live on
+	// /systemone, not /chat/completions, and speak {state, questions} instead
+	// of messages. Split off before the chat translators would consume the
+	// payload so the raw OpenAI envelope (system message with jev_questions,
+	// conversation lines for state) survives intact. Only the exact free-tier
+	// credential family is eligible; paid keys and non-jev model ids never
+	// reach this branch and keep their zero-change chat path below.
+	if opencode.IsZenJevModelID(baseModel) && opencode.IsZenFreeFingerprintAuth(e.provider, apiKey) {
+		return e.jevExecute(ctx, auth, req, opts, reporter, baseURL, apiKey, baseModel)
+	}
+
 	from := opts.SourceFormat
 	responseFormat := cliproxyexecutor.ResponseFormatOrSource(opts)
 	to := sdktranslator.FromString("openai")
@@ -146,6 +159,15 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 
 	url := strings.TrimSuffix(baseURL, "/") + endpoint
 	translated = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", translated, originalTranslated, requestedModel, requestPath, opts.Headers)
+	// Free-tier channel enforcement (opencode Zen anonymous tier): after the
+	// payload-config barrier, rewrite the FINAL business payload and headers
+	// into the opencode CLI fingerprint. Nothing below this point may touch
+	// business semantics; only header identity and the SSE aggregation of the
+	// forced stream response follow, which is the barrier's transport layer.
+	zenFree := opencode.IsZenFreeFingerprintAuth(e.provider, apiKey)
+	if zenFree {
+		translated = opencode.ApplyZenFreePayloadEnforcement(translated)
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(translated))
 	if err != nil {
 		return resp, err
@@ -160,6 +182,15 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	if zenFree {
+		// Last-writer-wins so neither user-configured nor client-supplied
+		// headers can displace the free-tier fingerprint the sink validates.
+		opencode.ApplyZenFreeFingerprintHeaders(ctx, httpReq)
+		// The anonymous tier only speaks SSE; ask for it explicitly even
+		// though the client asked for a non-stream response.
+		httpReq.Header.Set("Accept", "text/event-stream")
+		httpReq.Header.Set("Cache-Control", "no-cache")
+	}
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
@@ -204,6 +235,20 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 		return resp, err
 	}
 	helps.AppendAPIResponseChunk(ctx, e.cfg, body)
+	if zenFree {
+		// The anonymous tier answered with an SSE stream (we forced
+		// stream:true); fold the chunks into one non-stream chat.completion
+		// that the downstream translators can handle. This replaces the
+		// body, so ParseOpenAIUsage/ObserveResponseModel below see the
+		// assembled JSON, keeping accounting identical to a real non-stream
+		// response.
+		body, err = helps.AggregateOpenAISTreamChunks(bytes.NewReader(body), baseModel, time.Now().Unix())
+		if err != nil {
+			helps.RecordAPIResponseError(ctx, e.cfg, err)
+			err = statusErr{code: http.StatusBadGateway, msg: fmt.Sprintf("zen free tier stream aggregation failed: %v", err)}
+			return resp, err
+		}
+	}
 	body = reasoningBackfillForProvider(e.provider, body)
 	reporter.ObserveResponseModel(body)
 	// Ensure we at least record the request even if upstream doesn't return usage
@@ -262,6 +307,9 @@ func (e *OpenAICompatExecutor) executeImages(ctx context.Context, auth *cliproxy
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	// No zen-free fingerprint on images: the anonymous tier only exposes
+	// *-free chat/completions models, so free credentials never reach this
+	// branch, and the CLI fingerprint would mislabel these calls upstream.
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
@@ -332,6 +380,14 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 		return nil, err
 	}
 
+	// jev structured-evaluation split: same trigger as Execute. The upstream
+	// systemone call is a one-shot JSON POST; the SSE view is synthesized
+	// downstream from the single response, so no stream:true or tool stubs
+	// ride upstream here.
+	if opencode.IsZenJevModelID(baseModel) && opencode.IsZenFreeFingerprintAuth(e.provider, apiKey) {
+		return e.jevExecuteStream(ctx, auth, req, opts, reporter, baseURL, apiKey, baseModel)
+	}
+
 	from := opts.SourceFormat
 	responseFormat := cliproxyexecutor.ResponseFormatOrSource(opts)
 	to := sdktranslator.FromString("openai")
@@ -369,6 +425,14 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 
 	url := strings.TrimSuffix(baseURL, "/") + "/chat/completions"
 	translated = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", translated, originalTranslated, requestedModel, requestPath, opts.Headers)
+	// Free-tier channel enforcement (opencode Zen anonymous tier), same rule
+	// as Execute: bash/read tools must ride along on every upstream call even
+	// for stream requests, and the final payload is rewritten only after the
+	// payload-config barrier.
+	zenFree := opencode.IsZenFreeFingerprintAuth(e.provider, apiKey)
+	if zenFree {
+		translated = opencode.ApplyZenFreePayloadEnforcement(translated)
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(translated))
 	if err != nil {
 		return nil, err
@@ -385,6 +449,10 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
 	httpReq.Header.Set("Accept", "text/event-stream")
 	httpReq.Header.Set("Cache-Control", "no-cache")
+	if zenFree {
+		// Last-writer-wins: fingerprint headers must survive user headers.
+		opencode.ApplyZenFreeFingerprintHeaders(ctx, httpReq)
+	}
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
@@ -611,6 +679,216 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 	return &cliproxyexecutor.StreamResult{Headers: httpResp.Header.Clone(), Chunks: out}, nil
 }
 
+// jevExecute runs the non-stream structured-evaluation path against
+// /systemone. The upstream body is assembled from validated inputs only; the
+// request bypasses the chat payload barrier on purpose because the zen tier's
+// systemone contract carries no OpenAI payload semantics (no messages,
+// stream, or tools) for user payload rules to act on.
+func (e *OpenAICompatExecutor) jevExecute(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, reporter *helps.UsageReporter, baseURL, apiKey, baseModel string) (cliproxyexecutor.Response, error) {
+	httpReq, build, errBuild := e.buildZenJevRequest(ctx, auth, req, opts, baseURL, baseModel)
+	if errBuild != nil {
+		return cliproxyexecutor.Response{}, errBuild
+	}
+	upstreamBody, respHeaders, err := e.doZenJevRoundTrip(ctx, auth, httpReq, build.payload)
+	if err != nil {
+		return cliproxyexecutor.Response{}, err
+	}
+	completion, err := opencode.BuildZenJevChatCompletion(upstreamBody, build.model)
+	if err != nil {
+		return cliproxyexecutor.Response{}, err
+	}
+	reporter.ObserveResponseModel(completion)
+	responseFormat := cliproxyexecutor.ResponseFormatOrSource(opts)
+	var param any
+	out := sdktranslator.TranslateNonStream(ctx, sdktranslator.FromString("openai"), responseFormat, req.Model, helps.ApplyPatchOriginalRequest(req, opts), build.payload, completion, &param)
+	if helps.ApplyPatchTranslationError(param) != nil || len(out) == 0 {
+		return cliproxyexecutor.Response{}, statusErr{code: http.StatusBadGateway, msg: helps.ApplyPatchUpstreamErrorMessage}
+	}
+	reporter.Publish(ctx, helps.ParseOpenAIUsage(completion))
+	if responseFormat == sdktranslator.FormatOpenAIResponse {
+		out = helps.EnsureResponsesUsageDetails(out)
+	}
+	return cliproxyexecutor.Response{Payload: out, Headers: respHeaders}, nil
+}
+
+// jevExecuteStream shares the single-shot /systemone round trip with
+// jevExecute and then replays the assembled answers as one SSE sequence
+// through the normal stream translators, so OpenAI/Claude/Gemini/Codex
+// clients receive their expected final-frame protocol.
+func (e *OpenAICompatExecutor) jevExecuteStream(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, reporter *helps.UsageReporter, baseURL, apiKey, baseModel string) (_ *cliproxyexecutor.StreamResult, err error) {
+	httpReq, build, errBuild := e.buildZenJevRequest(ctx, auth, req, opts, baseURL, baseModel)
+	if errBuild != nil {
+		return nil, errBuild
+	}
+	upstreamBody, respHeaders, errRound := e.doZenJevRoundTrip(ctx, auth, httpReq, build.payload)
+	if errRound != nil {
+		return nil, errRound
+	}
+	completion, err := opencode.BuildZenJevChatCompletion(upstreamBody, build.model)
+	if err != nil {
+		return nil, err
+	}
+	reporter.ObserveResponseModel(completion)
+
+	responseFormat := cliproxyexecutor.ResponseFormatOrSource(opts)
+	from := opts.SourceFormat
+	to := sdktranslator.FromString("openai")
+	originalPayload := helps.ApplyPatchOriginalRequest(req, opts)
+	claudeInputTokens := helps.NewClaudeInputTokenState(from, to, responseFormat, originalPayload)
+	var param any
+	helps.InitializeApplyPatchStream(ctx, to, responseFormat, req.Model, originalPayload, build.payload, &param)
+
+	out := make(chan cliproxyexecutor.StreamChunk)
+	go func() {
+		defer close(out)
+		emit := func(line []byte) bool {
+			chunks := helps.TranslateStreamWithClaudeInputTokens(ctx, to, responseFormat, req.Model, originalPayload, build.payload, line, &param, claudeInputTokens)
+			helps.RecordApplyPatchStreamFailure(ctx, param, reporter, statusErr{code: http.StatusBadGateway, msg: helps.ApplyPatchUpstreamErrorMessage})
+			for i := range chunks {
+				select {
+				case out <- cliproxyexecutor.StreamChunk{Payload: chunks[i]}:
+				case <-ctx.Done():
+					return false
+				}
+			}
+			return true
+		}
+
+		sequence := opencode.BuildZenJevStreamSequence(completion)
+		lines := bytes.Split(sequence, []byte("\n"))
+		doneEmitted := false
+		for _, line := range lines {
+			trimmed := bytes.TrimSpace(line)
+			if len(trimmed) == 0 {
+				continue
+			}
+			if bytes.Equal(trimmed, []byte("data: [DONE]")) {
+				doneEmitted = true
+			}
+			if !emit(trimmed) {
+				return
+			}
+		}
+		if !doneEmitted {
+			if !emit([]byte("data: [DONE]")) {
+				return
+			}
+		}
+		if helps.EndApplyPatchStream(ctx, param, reporter, out, statusErr{code: http.StatusBadGateway, msg: helps.ApplyPatchUpstreamErrorMessage}) {
+			return
+		}
+		inputTokens, outputTokens, hasUsage := opencode.ParseZenJevUsage(upstreamBody)
+		detail := usage.Detail{}
+		if hasUsage {
+			detail.InputTokens = inputTokens
+			detail.OutputTokens = outputTokens
+			detail.TotalTokens = inputTokens + outputTokens
+		}
+		reporter.Publish(ctx, detail)
+		reporter.EnsurePublished(ctx)
+	}()
+	return &cliproxyexecutor.StreamResult{Headers: respHeaders, Chunks: out}, nil
+}
+
+// buildZenJevRequest extracts the jev contract from the OpenAI payload and
+// builds the authenticated upstream request, fingerprint included.
+func (e *OpenAICompatExecutor) buildZenJevRequest(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, baseURL, baseModel string) (*http.Request, zenJevRequestBuild, error) {
+	_, apiKey := e.resolveCredentials(auth)
+	state, questions, err := opencode.ParseZenJevRequestParts(req.Payload)
+	if err != nil {
+		code := http.StatusBadRequest
+		if !opencode.ZenJevValidationError(err) {
+			code = http.StatusInternalServerError
+		}
+		return nil, zenJevRequestBuild{}, statusErr{code: code, msg: err.Error()}
+	}
+	payload, err := opencode.BuildZenJevSystemOnePayload(baseModel, state, questions)
+	if err != nil {
+		return nil, zenJevRequestBuild{}, statusErr{code: http.StatusBadRequest, msg: err.Error()}
+	}
+	url := strings.TrimSuffix(baseURL, "/") + opencode.ZenJevSystemOnePath
+	httpReq, errNew := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if errNew != nil {
+		return nil, zenJevRequestBuild{}, errNew
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	httpReq.Header.Set("User-Agent", "cli-proxy-openai-compat")
+	var attrs map[string]string
+	if auth != nil {
+		attrs = auth.Attributes
+	}
+	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	// Last-writer-wins, exactly the chat free-tier rule: the zen sink rejects
+	// requests that do not look like the opencode CLI.
+	opencode.ApplyZenFreeFingerprintHeaders(ctx, httpReq)
+	// systemone answers with plain JSON in one shot: no stream:true, no tool
+	// stubs, no SSE Accept. Any payload rules the user configured stay off this
+	// path by design (they would corrupt the protocol contract).
+	httpReq.Header.Set("Accept", "application/json")
+	return httpReq, zenJevRequestBuild{model: baseModel, payload: payload}, nil
+}
+
+type zenJevRequestBuild struct {
+	model   string
+	payload []byte
+}
+
+// doZenJevRoundTrip executes the annotated systemone call and returns the
+// response body and headers, folding upstream failures into the same status
+// error semantics the other compat paths use. The payload is passed alongside
+// the request so the access-log snapshot never has to drain the live body.
+func (e *OpenAICompatExecutor) doZenJevRoundTrip(ctx context.Context, auth *cliproxyauth.Auth, httpReq *http.Request, payload []byte) ([]byte, http.Header, error) {
+	var authID, authLabel, authType, authValue string
+	if auth != nil {
+		authID = auth.ID
+		authLabel = auth.Label
+		authType, authValue = auth.AccountInfo()
+	}
+	helps.RecordAPIRequest(ctx, e.cfg, helps.UpstreamRequestLog{
+		URL:       httpReq.URL.String(),
+		Method:    http.MethodPost,
+		Headers:   httpReq.Header.Clone(),
+		Body:      payload,
+		Provider:  e.Identifier(),
+		AuthID:    authID,
+		AuthLabel: authLabel,
+		AuthType:  authType,
+		AuthValue: authValue,
+	})
+
+	httpClient := helps.NewProxyAwareHTTPClient(ctx, e.cfg, auth, 0)
+	httpResp, err := httpClient.Do(httpReq)
+	if err != nil {
+		helps.RecordAPIResponseError(ctx, e.cfg, err)
+		return nil, nil, err
+	}
+	defer func() {
+		if errClose := httpResp.Body.Close(); errClose != nil {
+			log.Errorf("openai compat executor: close jev response body error: %v", errClose)
+		}
+	}()
+	helps.RecordAPIResponseMetadata(ctx, e.cfg, httpResp.StatusCode, httpResp.Header.Clone())
+	respBody, errRead := io.ReadAll(httpResp.Body)
+	if errRead != nil {
+		helps.RecordAPIResponseError(ctx, e.cfg, errRead)
+		return nil, nil, errRead
+	}
+	helps.AppendAPIResponseChunk(ctx, e.cfg, respBody)
+	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+		helps.LogWithRequestID(ctx).Debugf("jev systemone error, status: %d, message: %s", httpResp.StatusCode, helps.SummarizeErrorBody(httpResp.Header.Get("Content-Type"), respBody))
+		return nil, nil, newOpenAICompatStatusError(httpResp.StatusCode, httpResp.Header, respBody)
+	}
+	if !gjson.ValidBytes(respBody) {
+		errInvalid := statusErr{code: http.StatusBadGateway, msg: "jev systemone returned invalid JSON"}
+		helps.RecordAPIResponseError(ctx, e.cfg, errInvalid)
+		return nil, nil, errInvalid
+	}
+	return respBody, httpResp.Header.Clone(), nil
+}
+
 func (e *OpenAICompatExecutor) executeImagesStream(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, endpointPath string) (_ *cliproxyexecutor.StreamResult, err error) {
 	baseModel := thinking.ParseSuffix(req.Model).ModelName
 
@@ -654,6 +932,8 @@ func (e *OpenAICompatExecutor) executeImagesStream(ctx context.Context, auth *cl
 		attrs = auth.Attributes
 	}
 	util.ApplyCustomHeadersFromAttrs(httpReq, attrs, opts.Headers)
+	// No zen-free fingerprint on images (same reasoning as executeImages):
+	// the anonymous tier only serves chat/completions *-free models.
 	var authID, authLabel, authType, authValue string
 	if auth != nil {
 		authID = auth.ID
