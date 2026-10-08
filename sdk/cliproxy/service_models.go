@@ -11,6 +11,8 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelconfig"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelprobe"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/providers"
+	_ "github.com/router-for-me/CLIProxyAPI/v8/internal/providers/builtin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -76,6 +78,77 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 		return
 	}
 	var models []*ModelInfo
+	// finish runs the shared post-switch registration tail (ctx check, OAuth
+	// alias, probe pruning, plugin append, register/unregister). Both the
+	// providers-registry fast path and the original switch converge here so
+	// their downstream behavior stays identical.
+	finish := func() {
+		if ctx.Err() != nil {
+			return
+		}
+		models = applyOAuthModelAliasForAuth(s.cfg, provider, authKind, a.Attributes, models)
+		if ctx.Err() != nil {
+			return
+		}
+		key := provider
+		if key == "" {
+			key = strings.ToLower(strings.TrimSpace(a.Provider))
+		}
+		// Per-credential probe pruning and block-phase hiding. Models the last
+		// cycle classified not_available drop out; when EVERY outcome is
+		// provider_blocked (e.g. Cline's periodic third-party clampdown), the
+		// credential currently serves nothing and the whole set hides (routing
+		// skips it) while the probe section stays for recovery. Without any
+		// `model_probe` section the catalog passes through unchanged. Sections
+		// resolve through SectionForAuth so config API-key credentials (no
+		// durable auth file) prune from the process-local live overlay too.
+		if probeSection := modelprobe.SectionForAuth(a); probeSection != nil {
+			if probeSection.IsProviderBlocked() {
+				models = nil
+			} else if len(probeSection.Pruned) > 0 {
+				models = modelprobe.FilterPrunedBySection(probeSection, models)
+			}
+		}
+		models = s.appendPluginModels(key, models)
+		if len(models) > 0 {
+			models = applyOAuthSettingsForAuth(s.cfg, provider, authKind, models)
+			s.registerResolvedModelsForAuth(a, key, applyModelPrefixes(models, a.Prefix, s.cfg != nil && s.cfg.ForceModelPrefix))
+			if strings.EqualFold(strings.TrimSpace(a.Provider), "antigravity") {
+				s.asyncProbeAntigravityCapabilities(ctx, a, key)
+			}
+			return
+		}
+
+		GlobalModelRegistry().UnregisterClient(a.ID)
+		if provider == "antigravity" {
+			s.asyncProbeAntigravityCapabilities(ctx, a, key)
+		}
+	}
+	// Fast path: consult the providers registry before the hand-written switch.
+	// A hit reproduces the channel's own case behavior exactly (catalog +
+	// config-list override + api-key excluded-models) and joins the same tail,
+	// and a miss simply falls through to the existing cases unmodified.
+	if spec, ok := providers.Lookup(provider); ok && spec.Models != nil {
+		base, _ := spec.Models(providers.ModelsRequest{Auth: a, Cfg: s.cfg, AuthKind: authKind}).([]*ModelInfo)
+		models = base
+		if re := spec.ResolveEntry(s.cfg, a); re.HasEntry {
+			if typedModels := registeredConfigModels(re); len(typedModels) > 0 && spec.BuildConfigModels != nil {
+				raw := make([]any, 0, len(typedModels))
+				for _, m := range typedModels {
+					raw = append(raw, m)
+				}
+				if built, _ := spec.BuildConfigModels(raw, spec.Key, spec.Key).([]*ModelInfo); built != nil {
+					models = built
+				}
+			}
+			if authKind == "apikey" {
+				excluded = re.Excluded
+			}
+		}
+		models = applyExcludedModels(models, excluded)
+		finish()
+		return
+	}
 	switch provider {
 	case constant.Gemini:
 		models = registry.GetGeminiModels()
@@ -398,46 +471,7 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 			}
 		}
 	}
-	if ctx.Err() != nil {
-		return
-	}
-	models = applyOAuthModelAliasForAuth(s.cfg, provider, authKind, a.Attributes, models)
-	if ctx.Err() != nil {
-		return
-	}
-	key := provider
-	if key == "" {
-		key = strings.ToLower(strings.TrimSpace(a.Provider))
-	}
-	// Per-credential probe pruning and block-phase hiding. Models the last
-	// cycle classified not_available drop out; when EVERY outcome is
-	// provider_blocked (e.g. Cline's periodic third-party clampdown), the
-	// credential currently serves nothing and the whole set hides (routing
-	// skips it) while the probe section stays for recovery. Without any
-	// `model_probe` section the catalog passes through unchanged. Sections
-	// resolve through SectionForAuth so config API-key credentials (no
-	// durable auth file) prune from the process-local live overlay too.
-	if probeSection := modelprobe.SectionForAuth(a); probeSection != nil {
-		if probeSection.IsProviderBlocked() {
-			models = nil
-		} else if len(probeSection.Pruned) > 0 {
-			models = modelprobe.FilterPrunedBySection(probeSection, models)
-		}
-	}
-	models = s.appendPluginModels(key, models)
-	if len(models) > 0 {
-		models = applyOAuthSettingsForAuth(s.cfg, provider, authKind, models)
-		s.registerResolvedModelsForAuth(a, key, applyModelPrefixes(models, a.Prefix, s.cfg != nil && s.cfg.ForceModelPrefix))
-		if strings.EqualFold(strings.TrimSpace(a.Provider), "antigravity") {
-			s.asyncProbeAntigravityCapabilities(ctx, a, key)
-		}
-		return
-	}
-
-	GlobalModelRegistry().UnregisterClient(a.ID)
-	if provider == "antigravity" {
-		s.asyncProbeAntigravityCapabilities(ctx, a, key)
-	}
+	finish()
 }
 
 // refreshModelRegistrationForAuth re-applies the latest model registration for
@@ -687,6 +721,21 @@ func (s *Service) resolveConfigCodexKey(auth *coreauth.Auth) *config.CodexKey {
 		return nil
 	}
 	return resolveConfigCodexStyleKey(auth, s.cfg.CodexKey, true)
+}
+
+// registeredConfigModels extracts the config-listed models of an entry resolved
+// through a Spec's ResolveEntry. The concrete config model type is left to the
+// builtin closure; here we only read the entry's models as []any so callers
+// can hand them to Spec.BuildConfigModels without naming any config type.
+func registeredConfigModels(re providers.ResolvedEntry) []any {
+	if !re.HasEntry || re.Entry == nil {
+		return nil
+	}
+	carrier, ok := re.Entry.(interface{ GetConfigModels() []any })
+	if !ok {
+		return nil
+	}
+	return carrier.GetConfigModels()
 }
 
 func (s *Service) resolveConfigXAIKey(auth *coreauth.Auth) *config.XAIKey {
