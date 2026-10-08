@@ -1256,6 +1256,24 @@ func (e *OpenAICompatExecutor) resolveCredentials(auth *cliproxyauth.Auth) (base
 		baseURL = strings.TrimSpace(auth.Attributes["base_url"])
 		apiKey = strings.TrimSpace(auth.Attributes["api_key"])
 	}
+	// Uploaded auth files keep base_url/api_key in Metadata (the auth-file
+	// synthesizer family does not lift them into Attributes the way the config
+	// key families do), so fall back to Metadata when Attributes are empty —
+	// mirroring the devin/meta credential resolution. Without this, uploaded
+	// opencode-go free-tier credentials resolve an empty base URL and fail with
+	// "missing provider baseURL" before the fingerprint branch can engage.
+	if auth.Metadata != nil {
+		if baseURL == "" {
+			if v, ok := auth.Metadata["base_url"].(string); ok {
+				baseURL = strings.TrimSpace(v)
+			}
+		}
+		if apiKey == "" {
+			if v, ok := auth.Metadata["api_key"].(string); ok {
+				apiKey = strings.TrimSpace(v)
+			}
+		}
+	}
 	return
 }
 
