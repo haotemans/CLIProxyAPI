@@ -67,7 +67,7 @@ if ! systemctl is-active --quiet "$SERVICE" || ! curl -sf -m 10 "$HEALTH_URL" -o
     cp -a "$PREV_BAK" "$BINARY"
     systemctl restart "$SERVICE"
     sleep 8
-    systemctl is-active --quiet "$SERVICE" || { echo "!! rollback failed, service still down" >&2; exit 1 }
+    systemctl is-active --quiet "$SERVICE" || { echo "!! rollback failed, service still down" >&2; exit 1; }
     echo ">> rolled back, service active again"
   fi
   exit 1
