@@ -129,11 +129,11 @@ type KiroToolUse struct {
 
 // ConvertClaudeRequestToKiro converts a Claude API request to Kiro format.
 // This is the main entry point for request translation.
-func ConvertClaudeRequestToKiro(modelName string, inputRawJSON []byte, stream bool) []byte {
+func ConvertClaudeRequestToKiro(modelName string, inputRawJSON []byte, stream bool) ([]byte, error) {
 	// For Kiro, we pass through the Claude format since buildKiroPayload
 	// expects Claude format and does the conversion internally.
 	// The actual conversion happens in the executor when building the HTTP request.
-	return inputRawJSON
+	return inputRawJSON, nil
 }
 
 // BuildKiroPayload constructs the Kiro API request payload from Claude format.
