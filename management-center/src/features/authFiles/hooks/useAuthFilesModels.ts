@@ -13,12 +13,12 @@ export type UseAuthFilesModelsResult = {
   modelsList: AuthFileModelItem[];
   modelsFileName: string;
   modelsFileType: string;
-  /** 当前打开模型的凭证 auth_index；model-test 探测端点按其寻址。 */
+  /** Credential index used by the model-test endpoint. */
   modelsFileAuthIndex: string;
   modelsError: ModelsError;
   showModels: (item: AuthFileItem) => Promise<void>;
   closeModelsModal: () => void;
-  /** 文件集变更后失效缓存；不传 names 则全部清空。 */
+  /** Invalidate pending model requests after credential changes. */
   invalidateModels: (names?: string[]) => void;
 };
 
@@ -33,7 +33,6 @@ export function useAuthFilesModels(): UseAuthFilesModelsResult {
   const [modelsFileType, setModelsFileType] = useState('');
   const [modelsFileAuthIndex, setModelsFileAuthIndex] = useState('');
   const [modelsError, setModelsError] = useState<ModelsError>(null);
-  const modelsCacheRef = useRef<Map<string, AuthFileModelItem[]>>(new Map());
   const modelsCacheVersionRef = useRef(0);
   const modelsFileVersionRef = useRef<Map<string, number>>(new Map());
   const activeModelsRequestIdRef = useRef(0);
@@ -46,13 +45,11 @@ export function useAuthFilesModels(): UseAuthFilesModelsResult {
 
   const invalidateModels = useCallback((names?: string[]) => {
     if (!names) {
-      modelsCacheRef.current.clear();
       modelsFileVersionRef.current.clear();
       modelsCacheVersionRef.current += 1;
       return;
     }
     new Set(names.map((name) => name.trim()).filter(Boolean)).forEach((name) => {
-      modelsCacheRef.current.delete(name);
       modelsFileVersionRef.current.set(name, (modelsFileVersionRef.current.get(name) ?? 0) + 1);
     });
   }, []);
@@ -69,13 +66,8 @@ export function useAuthFilesModels(): UseAuthFilesModelsResult {
       setModelsError(null);
       setModelsModalOpen(true);
 
-      const cached = modelsCacheRef.current.get(cacheKey);
-      if (cached) {
-        setModelsList(cached);
-        setModelsLoading(false);
-        return;
-      }
-
+      // Probe results can change without a credential-list refresh.
+      // Fetch the effective roster each time the dialog opens.
       const cacheVersion = modelsCacheVersionRef.current;
       const fileVersion = modelsFileVersionRef.current.get(cacheKey) ?? 0;
       const isCacheCurrent = () =>
@@ -87,7 +79,6 @@ export function useAuthFilesModels(): UseAuthFilesModelsResult {
       try {
         const models = await authFilesApi.getModelsForAuthFile(item.name);
         if (isCacheCurrent()) {
-          modelsCacheRef.current.set(cacheKey, models);
           if (isRequestCurrent()) setModelsList(models);
         }
       } catch (err) {

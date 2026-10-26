@@ -157,14 +157,25 @@ func FilterPrunedForAuth(metadata map[string]any, models []*registry.ModelInfo) 
 // for callers that resolve sections through SectionForAuth (config API-key
 // credentials carry their section in the live overlay, not the metadata).
 func FilterPrunedBySection(section *Section, models []*registry.ModelInfo) []*registry.ModelInfo {
-	if section == nil || (len(section.Pruned) == 0 && len(section.pruneRemoved()) == 0) {
+	if section == nil {
 		return models
 	}
 	pruned := make(map[string]struct{}, len(section.Pruned))
 	for _, id := range section.Pruned {
 		pruned[strings.ToLower(strings.TrimSpace(id))] = struct{}{}
 	}
+	// Older probes classified Mirasim client restrictions as auth errors.
+	// Honor the saved denial immediately without another paid probe or a
+	// credential rewrite; a later successful outcome restores the model.
+	for id, outcome := range section.PerModel {
+		if outcome != nil && outcome.Status == StatusAuthError && isMirasimClientRestriction(outcome.Error) {
+			pruned[strings.ToLower(strings.TrimSpace(id))] = struct{}{}
+		}
+	}
 	removed := section.pruneRemoved()
+	if len(pruned) == 0 && len(removed) == 0 {
+		return models
+	}
 	out := make([]*registry.ModelInfo, 0, len(models))
 	for _, model := range models {
 		if model == nil {

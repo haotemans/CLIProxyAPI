@@ -121,7 +121,7 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
 		if probeSection := modelprobe.SectionForAuth(a); probeSection != nil {
 			if probeSection.IsProviderBlocked() {
 				models = nil
-			} else if len(probeSection.Pruned) > 0 {
+			} else {
 				models = modelprobe.FilterPrunedBySection(probeSection, models)
 			}
 		}

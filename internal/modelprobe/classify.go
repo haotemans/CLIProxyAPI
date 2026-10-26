@@ -2,6 +2,14 @@ package modelprobe
 
 import "strings"
 
+// isMirasimClientRestriction identifies a model rejected for this client,
+// rather than an expired credential or a temporary capacity failure.
+func isMirasimClientRestriction(message string) bool {
+	message = strings.ToLower(message)
+	return strings.Contains(message, "this client is not supported") &&
+		strings.Contains(message, "mirasim client") && strings.Contains(message, "claude code")
+}
+
 // notAvailableMarkers hits provider-specific text that unambiguously means
 // "this account cannot use this model" — tier gates, unavailable flags and
 // unknown model errors across OpenAI/Anthropic/Connect/Codewhisperer styles.
@@ -148,6 +156,9 @@ func classifyProbeError(err error) Status {
 	// status code: never classify them, never prune on them.
 	if isUnknownMessage(err) {
 		return StatusUnknown
+	}
+	if isMirasimClientRestriction(err.Error()) {
+		return StatusNotAvailable
 	}
 	// Officially deprecated ids speak like temporary account blocks: prune
 	// regardless of the wire status (the id never works for this account).
