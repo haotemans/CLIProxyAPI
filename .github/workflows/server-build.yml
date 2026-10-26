@@ -60,6 +60,9 @@ jobs:
               tar -C /usr/local -xzf "/tmp/${go_archive}"
               export PATH="/usr/local/go/bin:${PATH}"
 
+              go test ./internal/auth/mirasim -count=1
+              go test ./internal/api/handlers/management -run Mirasim -count=1
+
               CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -buildvcs=false \
                 -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILD_DATE}" \
                 -o dist/cli-proxy-api-linux-amd64 ./cmd/server/
@@ -70,14 +73,6 @@ jobs:
               fi
             '
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cli-proxy-api-linux-amd64
-          path: dist/cli-proxy-api-linux-amd64
-          retention-days: 3
-          if-no-files-found: error
-
       - name: Build management panel
         uses: oven-sh/setup-bun@v2
 
@@ -86,8 +81,23 @@ jobs:
         run: |
           set -euo pipefail
           bash management-center/build.sh
+          (cd management-center && bun test tests/mirasimOAuthTranslations.test.ts)
           cp static/management.html dist/management.html
           test -s dist/management.html
+          git rev-parse HEAD > dist/revision.txt
+          (cd dist && sha256sum cli-proxy-api-linux-amd64 management.html > SHA256SUMS)
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-proxy-api-linux-amd64
+          path: |
+            dist/cli-proxy-api-linux-amd64
+            dist/management.html
+            dist/revision.txt
+            dist/SHA256SUMS
+          retention-days: 3
+          if-no-files-found: error
 
       - name: Publish to rolling release
         shell: bash

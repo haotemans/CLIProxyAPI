@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	mirasimauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/mirasim"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 )
 
@@ -102,6 +103,54 @@ func setupMirasimOAuthHandler(t *testing.T, services *mirasimOAuthTestServices) 
 		tokenStore:     store,
 	}
 	return h, store
+}
+
+func TestMirasimOAuthBrowserForms_AllowSameOriginSubmission(t *testing.T) {
+	services := newMirasimOAuthTestServices(t)
+	h, _ := setupMirasimOAuthHandler(t, services)
+	coordinator := h.mirasimOauthCoordinator()
+	start, errStart := coordinator.StartBrowserLogin(context.Background(), mirasimOAuthEffectiveSettings(mirasimauth.Settings{}), "http://127.0.0.1:8317", "")
+	if errStart != nil {
+		t.Fatalf("start browser login: %v", errStart)
+	}
+	router := gin.New()
+	router.GET("/mirasim/oauth/start", h.GetMirasimOAuthStart)
+	router.GET("/mirasim/oauth/email/send", h.GetMirasimOAuthEmailSend)
+	router.GET("/mirasim/oauth/callback", h.GetMirasimOAuthCallback)
+	for _, path := range []string{
+		"/mirasim/oauth/start?state=" + start.State,
+		"/mirasim/oauth/email/send?state=" + start.State + "&token_email=operator%40example.com",
+	} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<form") {
+			t.Fatalf("form page status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "form-action 'self'") {
+			t.Fatalf("form page blocks its own submissions: %s", rec.Header().Get("Content-Security-Policy"))
+		}
+		if rec.Header().Get("Cache-Control") != "no-store" || rec.Header().Get("Referrer-Policy") != "no-referrer" {
+			t.Fatal("sign-in page must not cache or leak callback URLs")
+		}
+	}
+
+	// The remote-browser paste fallback must still reach this session's callback.
+	callback := "http://127.0.0.1:8317/mirasim/oauth/callback?" + url.Values{
+		"state": {start.State}, "access_token": {"test-access"}, "refresh_token": {"test-refresh"},
+	}.Encode()
+	query := url.Values{"token_url": {callback}}
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/mirasim/oauth/callback?"+query.Encode(), nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "sign-in complete") {
+		t.Fatalf("pasted callback status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "form-action 'none'") {
+		t.Fatal("terminal callback page must keep its restrictive form policy")
+	}
+	access, refresh, errDrain := coordinator.DrainCredential(start.State)
+	if errDrain != nil || access != "test-access" || refresh != "test-refresh" {
+		t.Fatalf("pasted callback did not preserve the credential: %v", errDrain)
+	}
 }
 
 func TestRequestMirasimToken_StartShape(t *testing.T) {

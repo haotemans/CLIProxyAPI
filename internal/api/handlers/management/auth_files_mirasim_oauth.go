@@ -186,7 +186,7 @@ func (h *Handler) finalizeMirasimOAuthSession(state string, settings mirasimauth
 // GetMirasimOAuthStart serves GET /mirasim/oauth/start (provider chooser page).
 func (h *Handler) GetMirasimOAuthStart(c *gin.Context) {
 	status, body := h.mirasimOauthCoordinator().StartPage(c.Query("state"))
-	serveMirasimPage(c, status, body, false)
+	serveMirasimPage(c, status, body, true)
 }
 
 // GetMirasimOAuthAuthorize serves GET /mirasim/oauth/authorize (302 to Mirasim).
