@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: '1.26.4'
+  GO_VERSION: '1.26.10'
   RELEASE_TAG: server-latest
   ASSET_NAME: cli-proxy-api-linux-amd64
 
