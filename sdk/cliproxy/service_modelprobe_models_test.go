@@ -36,9 +36,9 @@ func TestModelProbePrunedModelsDropFromAdvertisedSet(t *testing.T) {
 		"type": "claude",
 	})
 
-	// Baseline: full claude catalog registers.
+	// Baseline: full claude catalog registers through the production auth
+	// update path so the manager holds the current registration epoch.
 	s.applyCoreAuthAddOrUpdate(ctx, live)
-	s.registerModelsForAuth(ctx, live)
 	before := GlobalModelRegistry().GetModelsForClient(authID)
 	if len(before) == 0 {
 		t.Fatal("claude catalog not registered")
@@ -56,7 +56,9 @@ func TestModelProbePrunedModelsDropFromAdvertisedSet(t *testing.T) {
 	live.Metadata[modelprobe.MetadataKey] = section
 	updated := live.Clone()
 	s.handleAuthUpdates(ctx, nil) // no-op wiring sanity
-	s.registerModelsForAuth(ctx, updated)
+	// Re-register through the manager-aware path; a bare registerModelsForAuth
+	// call carries a stale registration epoch and is fenced out by design.
+	s.applyCoreAuthAddOrUpdate(ctx, updated)
 	after := GlobalModelRegistry().GetModelsForClient(authID)
 	if containsID(after, "claude-sonnet-4-6") {
 		t.Fatalf("pruned model still advertised: %+v", after)
@@ -78,7 +80,7 @@ func TestModelProbePrunedModelsDropFromAdvertisedSet(t *testing.T) {
 		t.Fatalf("merge must re-add: %+v", merged)
 	}
 	live.Metadata[modelprobe.MetadataKey] = merged
-	s.registerModelsForAuth(ctx, live.Clone())
+	s.applyCoreAuthAddOrUpdate(ctx, live.Clone())
 	if !containsID(GlobalModelRegistry().GetModelsForClient(authID), "claude-sonnet-4-6") {
 		t.Fatalf("re-added model not advertised again: %+v", GlobalModelRegistry().GetModelsForClient(authID))
 	}
@@ -92,7 +94,6 @@ func TestModelProbeNoSectionPassthrough(t *testing.T) {
 	authID := "no-probe-claude.json"
 	live := claudeProbeTestAuth(authID, map[string]any{"type": "claude"})
 	s.applyCoreAuthAddOrUpdate(ctx, live)
-	s.registerModelsForAuth(ctx, live)
 	got := GlobalModelRegistry().GetModelsForClient(authID)
 	if len(got) == 0 {
 		t.Fatal("no catalog registered on unprobed credential")
