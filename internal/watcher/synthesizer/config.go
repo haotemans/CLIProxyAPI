@@ -270,7 +270,7 @@ func (s *ConfigSynthesizer) synthesizeMirasimKeys(ctx *SynthesisContext) []*core
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
-		ApplyAuthExcludedModelsMeta(a, cfg, mk.ExcludedModels, "apikey")
+		ApplyAuthExcludedModelsMeta(a, mk.ExcludedModels, "apikey")
 		if len(a.Metadata) == 0 {
 			a.Metadata = nil
 		}
@@ -330,7 +330,7 @@ func (s *ConfigSynthesizer) synthesizeCommandcodeKeys(ctx *SynthesisContext) []*
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
-		ApplyAuthExcludedModelsMeta(a, cfg, mk.ExcludedModels, "apikey")
+		ApplyAuthExcludedModelsMeta(a, mk.ExcludedModels, "apikey")
 		if len(a.Metadata) == 0 {
 			a.Metadata = nil
 		}
@@ -388,7 +388,7 @@ func (s *ConfigSynthesizer) synthesizeOpencodeGoKeys(ctx *SynthesisContext) []*c
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
-		ApplyAuthExcludedModelsMeta(a, cfg, mk.ExcludedModels, "apikey")
+		ApplyAuthExcludedModelsMeta(a, mk.ExcludedModels, "apikey")
 		if len(a.Metadata) == 0 {
 			a.Metadata = nil
 		}
@@ -448,7 +448,7 @@ func (s *ConfigSynthesizer) synthesizeClineKeys(ctx *SynthesisContext) []*coreau
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
-		ApplyAuthExcludedModelsMeta(a, cfg, ck.ExcludedModels, "apikey")
+		ApplyAuthExcludedModelsMeta(a, ck.ExcludedModels, "apikey")
 		if len(a.Metadata) == 0 {
 			a.Metadata = nil
 		}
