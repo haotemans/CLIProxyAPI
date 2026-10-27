@@ -43,13 +43,15 @@ type Scheduler struct {
 	jitterRand      func() float64
 	newTimer        func(time.Duration) (<-chan time.Time, func())
 
-	mu          sync.Mutex
-	done        chan struct{}
-	wg          sync.WaitGroup
-	started     bool
-	running     bool
-	cycleNumber uint64
-	nextRunAt   time.Time
+	mu            sync.Mutex
+	done          chan struct{}
+	wg            sync.WaitGroup
+	started       bool
+	running       bool
+	cycleNumber   uint64
+	nextRunAt     time.Time
+	activeAuths   map[string]bool
+	pruneUnusable bool
 
 	// OnCycleComplete receives the number of credentials probed (observability).
 	OnCycleComplete func(probed int)
@@ -57,7 +59,9 @@ type Scheduler struct {
 
 // SchedulerOptions tunes the scheduler.
 type SchedulerOptions struct {
-	Interval time.Duration
+	// PruneUnusable enables recovery-aware backoff for temporarily hidden models.
+	PruneUnusable bool
+	Interval      time.Duration
 	// RecheckInterval is the low-frequency re-probe cadence for models whose
 	// last outcome was usable, and the cap for per-model failure backoff.
 	// Default 7 days.
@@ -95,6 +99,7 @@ func NewScheduler(engine *Engine, store *Store, auths AuthsFunc, catalog Catalog
 	}
 	return &Scheduler{
 		engine:          engine,
+		pruneUnusable:   opts.PruneUnusable,
 		store:           store,
 		auths:           auths,
 		catalog:         catalog,
@@ -253,6 +258,10 @@ func (s *Scheduler) probeAuth(ctx context.Context, auth *cliproxyauth.Auth, cycl
 	if auth == nil || auth.Disabled {
 		return false
 	}
+	if !s.beginAuthProbe(auth.ID) {
+		return false
+	}
+	defer s.endAuthProbe(auth.ID)
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("modelprobe: credential probe panic for %s: %v", auth.ID, r)
@@ -270,7 +279,7 @@ func (s *Scheduler) probeAuth(ctx context.Context, auth *cliproxyauth.Auth, cycl
 			s.recordCredentialSkip(auth, previous, "provider_blocked backoff (every 4th cycle)", cycle)
 			return false
 		}
-		if sectionHasAuthError(previous) {
+		if sectionHasAuthError(previous) && (!s.pruneUnusable || !sectionHasUsableOutcome(previous)) {
 			s.recordCredentialSkip(auth, previous, "auth_error backoff (every 4th cycle)", cycle)
 			return false
 		}
@@ -293,9 +302,7 @@ func (s *Scheduler) probeAuth(ctx context.Context, auth *cliproxyauth.Auth, cycl
 		return false
 	}
 	ContinueFailureStreaks(previous, section)
-	if len(skips) > 0 {
-		section.Skips = skips
-	}
+	section.Skips = mergeSkips(section.Skips, skips)
 	if s.store != nil {
 		merged := s.store.ApplyOutcome(auth, section)
 		if len(skips) > 0 && merged != nil {
@@ -432,7 +439,11 @@ func (s *Scheduler) filterDueCandidates(models []string, previous *Section, now 
 		case StatusNotAvailable:
 			// Model was pruned before and shows up in the catalog again: the
 			// revival check must not wait for any backoff window.
-			out = append(out, id)
+			if !s.pruneUnusable || now.Sub(checked) >= failureBackoff(row.Failures, s.interval, s.recheckInterval) {
+				out = append(out, id)
+			} else {
+				skip(key, "unavailable model recovery backoff")
+			}
 		case StatusLimited:
 			out = append(out, id)
 		default:
@@ -454,6 +465,18 @@ func sectionHasAuthError(section *Section) bool {
 	}
 	for _, outcome := range section.PerModel {
 		if outcome != nil && outcome.Status == StatusAuthError {
+			return true
+		}
+	}
+	return false
+}
+
+func sectionHasUsableOutcome(section *Section) bool {
+	if section == nil {
+		return false
+	}
+	for _, outcome := range section.PerModel {
+		if outcome != nil && outcome.Status == StatusUsable {
 			return true
 		}
 	}
@@ -496,22 +519,40 @@ func mergeSkips(previous, fresh map[string]string) map[string]string {
 }
 
 // candidates resolves the model set to probe: registered catalog ids minus
-// critically tiny dedupe; falls back to the previous section rows when the
-// registry list is empty (auth just added and not yet re-registered).
+// Hidden models stay in the candidate set alongside registered models so a
+// successful recovery probe can restore them without a process restart.
 func (s *Scheduler) candidates(auth *cliproxyauth.Auth) []string {
+	var ids []string
 	if s.catalog != nil {
-		if ids := s.catalog(auth); len(ids) > 0 {
-			return ids
-		}
+		ids = append(ids, s.catalog(auth)...)
 	}
 	if section := SectionForAuth(auth); section != nil {
-		ids := make([]string, 0, len(section.PerModel))
 		for id := range section.PerModel {
 			ids = append(ids, id)
 		}
-		return ids
 	}
-	return nil
+	return dedupeSorted(dedupeIDs(ids))
+}
+
+// Scheduled and first-import probes share this guard, preventing duplicate
+// inference requests for the same credential during startup or reloads.
+func (s *Scheduler) beginAuthProbe(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.activeAuths[id] {
+		return false
+	}
+	if s.activeAuths == nil {
+		s.activeAuths = make(map[string]bool)
+	}
+	s.activeAuths[id] = true
+	return true
+}
+
+func (s *Scheduler) endAuthProbe(id string) {
+	s.mu.Lock()
+	delete(s.activeAuths, id)
+	s.mu.Unlock()
 }
 
 // TriggerAuth runs one credential's probe inline (manual or first-import).
@@ -520,6 +561,13 @@ func (s *Scheduler) candidates(auth *cliproxyauth.Auth) []string {
 func (s *Scheduler) TriggerAuth(ctx context.Context, auth *cliproxyauth.Auth) *Section {
 	if s == nil || auth == nil || auth.Disabled {
 		return nil
+	}
+	if !s.beginAuthProbe(auth.ID) {
+		return SectionForAuth(auth)
+	}
+	defer s.endAuthProbe(auth.ID)
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
 	if !s.engine.HasDriver(provider) {

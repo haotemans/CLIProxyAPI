@@ -455,6 +455,8 @@ type DistributionKey struct {
 type ModelProbeConfig struct {
 	// Enabled toggles the scheduler. Default false (safe).
 	Enabled bool `yaml:"enabled" json:"enabled"`
+	// PruneUnusable hides failed probes until a later successful recheck.
+	PruneUnusable bool `yaml:"prune-unusable" json:"prune-unusable"`
 	// Interval is the probe interval in seconds. Default 21600 (6h).
 	Interval int `yaml:"interval" json:"interval"`
 	// RecheckInterval is the low-frequency tier cadence in seconds for models

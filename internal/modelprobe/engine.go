@@ -31,18 +31,19 @@ type executorFactory func(cfg *config.Config) RequestExecutor
 // cursor (Connect/H2), kiro (EventStream), cline, claude, codex, xai, devin,
 // meta, mirasim (signed relay via the mirasim OAuth branch), commandcode and
 // opencode-go (OpenAI chat-completions relays over the compat executor).
-// Skipped providers (gemini/antigravity/vertex/aistudio/interactions) are
+// Skipped providers (gemini/vertex/aistudio/interactions) are
 // reported as unsupported drivers.
 var executorFactories = map[string]executorFactory{
-	"cline":   func(cfg *config.Config) RequestExecutor { return executor.NewClineExecutor(cfg) },
-	"cursor":  func(cfg *config.Config) RequestExecutor { return executor.NewCursorExecutor(cfg) },
-	"kiro":    func(cfg *config.Config) RequestExecutor { return executor.NewKiroExecutor(cfg) },
-	"claude":  func(cfg *config.Config) RequestExecutor { return executor.NewClaudeExecutor(cfg) },
-	"codex":   func(cfg *config.Config) RequestExecutor { return executor.NewCodexExecutor(cfg) },
-	"xai":     func(cfg *config.Config) RequestExecutor { return executor.NewXAIExecutor(cfg) },
-	"devin":   func(cfg *config.Config) RequestExecutor { return executor.NewDevinExecutor(cfg) },
-	"meta":    func(cfg *config.Config) RequestExecutor { return executor.NewMetaExecutor(cfg) },
-	"mirasim": func(cfg *config.Config) RequestExecutor { return executor.NewMirasimExecutor(cfg) },
+	"antigravity": func(cfg *config.Config) RequestExecutor { return executor.NewAntigravityExecutor(cfg) },
+	"cline":       func(cfg *config.Config) RequestExecutor { return executor.NewClineExecutor(cfg) },
+	"cursor":      func(cfg *config.Config) RequestExecutor { return executor.NewCursorExecutor(cfg) },
+	"kiro":        func(cfg *config.Config) RequestExecutor { return executor.NewKiroExecutor(cfg) },
+	"claude":      func(cfg *config.Config) RequestExecutor { return executor.NewClaudeExecutor(cfg) },
+	"codex":       func(cfg *config.Config) RequestExecutor { return executor.NewCodexExecutor(cfg) },
+	"xai":         func(cfg *config.Config) RequestExecutor { return executor.NewXAIExecutor(cfg) },
+	"devin":       func(cfg *config.Config) RequestExecutor { return executor.NewDevinExecutor(cfg) },
+	"meta":        func(cfg *config.Config) RequestExecutor { return executor.NewMetaExecutor(cfg) },
+	"mirasim":     func(cfg *config.Config) RequestExecutor { return executor.NewMirasimExecutor(cfg) },
 	"commandcode": func(cfg *config.Config) RequestExecutor {
 		return executor.NewOpenAICompatExecutor("commandcode", cfg)
 	},
@@ -94,14 +95,16 @@ type Engine struct {
 	opts        Options
 	executorsMu sync.Mutex
 	executors   map[string]RequestExecutor
+	probeSlots  chan struct{}
 }
 
 // NewEngine constructs the probe engine bound to the runtime config.
 func NewEngine(cfg *config.Config, opts Options) *Engine {
 	return &Engine{
-		cfg:       cfg,
-		opts:      opts,
-		executors: make(map[string]RequestExecutor, 12),
+		cfg:        cfg,
+		opts:       opts,
+		executors:  make(map[string]RequestExecutor, 12),
+		probeSlots: make(chan struct{}, maxInt(opts.MaxParallel, 1)),
 	}
 }
 
@@ -160,6 +163,21 @@ func (e *Engine) ProbeOne(ctx context.Context, auth *cliproxyauth.Auth, provider
 	if auth == nil {
 		return ModelOutcome{Status: StatusAuthError, Error: "auth is nil"}
 	}
+	upstreamModel := model
+	if prefix := strings.Trim(strings.TrimSpace(auth.Prefix), "/"); prefix != "" {
+		upstreamModel = strings.TrimPrefix(upstreamModel, prefix+"/")
+	}
+	if requiresMediaProbe(provider, upstreamModel) {
+		return ModelOutcome{Status: StatusUnknown, Error: "requires a dedicated media probe; automatic generation skipped"}
+	}
+	if e.probeSlots != nil {
+		select {
+		case e.probeSlots <- struct{}{}:
+			defer func() { <-e.probeSlots }()
+		case <-ctx.Done():
+			return ModelOutcome{Status: StatusUnknown}
+		}
+	}
 	exec, ok := e.executorFor(provider)
 	if !ok {
 		return ModelOutcome{Status: StatusUnreachable, Error: "no probe driver for provider " + provider}
@@ -172,10 +190,10 @@ func (e *Engine) ProbeOne(ctx context.Context, auth *cliproxyauth.Auth, provider
 	defer cancel()
 	// Pre-flight signal first (provider-specific, e.g. mirasim's free limits
 	// lane): an exhausted model window marks limited without a model call.
-	if preflight := e.preflightOutcome(probeCtx, auth, provider, model); preflight != nil {
+	if preflight := e.preflightOutcome(probeCtx, auth, provider, upstreamModel); preflight != nil {
 		return *preflight
 	}
-	req := cliproxyexecutor.Request{Model: model, Payload: buildProbePayloadForProvider(provider, model)}
+	req := cliproxyexecutor.Request{Model: upstreamModel, Payload: buildProbePayloadForProvider(provider, upstreamModel)}
 	_, err := exec.Execute(probeCtx, auth, req, probeOptions())
 	outcome := ModelOutcome{
 		Status:    classifyProbeError(err),
@@ -208,7 +226,18 @@ func (e *Engine) CredentialCycle(ctx context.Context, auth *cliproxyauth.Auth, p
 		models = models[:cap]
 	}
 	outcomes := probeAll(ctx, e, auth, provider, models, maxInt(e.opts.MaxParallel, 1))
+	if len(outcomes) == 0 {
+		return nil
+	}
 	section := synthesizeSection(e.Now(), outcomes)
+	for id, outcome := range outcomes {
+		if outcome.Status == StatusUnknown && outcome.Error != "" {
+			if section.Skips == nil {
+				section.Skips = make(map[string]string)
+			}
+			section.Skips[id] = outcome.Error
+		}
+	}
 	section.CatalogSize = catalogSize
 	if len(section.Pruned) > 0 {
 		log.Infof("%s: %s credential %s pruned %d models: %v", logPrefix(e.opts), provider, auth.ID, len(section.Pruned), firstN(section.Pruned, 6))

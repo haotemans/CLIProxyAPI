@@ -62,7 +62,7 @@ jobs:
 
               go test ./internal/auth/mirasim -count=1
               go test ./internal/modelprobe -count=1
-              go test ./sdk/cliproxy -run "TestMirasim|TestRegisterModels_Mirasim" -count=1
+              go test ./sdk/cliproxy -run "TestMirasim|TestModelProbe|TestRegisterModels|TestAntigravity|TestModelRegistration" -count=1
               go test ./internal/api/handlers/management -run Mirasim -count=1
 
               CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -buildvcs=false \

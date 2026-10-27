@@ -24,7 +24,8 @@ import (
 // The revive path shares this same state source: a blocked credential that a
 // later probe finds healthy stops contributing IsProviderBlocked, and its
 // models reappear on the very next assembly (nothing is cached here).
-func HiddenModelIDs(auths []*cliproxyauth.Auth) map[string]struct{} {
+func HiddenModelIDs(auths []*cliproxyauth.Auth, pruneUnusable ...bool) map[string]struct{} {
+	strict := len(pruneUnusable) > 0 && pruneUnusable[0]
 	covered := make(map[string]struct{})
 	servable := make(map[string]struct{})
 	for _, auth := range auths {
@@ -49,7 +50,11 @@ func HiddenModelIDs(auths []*cliproxyauth.Auth) map[string]struct{} {
 				continue
 			}
 			covered[key] = struct{}{}
-			if outcome == nil || (outcome.Status != StatusNotAvailable && outcome.Status != StatusProviderBlocked) {
+			available := outcome == nil || (outcome.Status != StatusNotAvailable && outcome.Status != StatusProviderBlocked)
+			if outcome != nil && (strict || isMirasimClientRestriction(outcome.Error)) {
+				available = outcome.Status == StatusUsable || outcome.Status == StatusUnknown
+			}
+			if available {
 				servable[key] = struct{}{}
 			}
 		}

@@ -61,11 +61,11 @@ describe('probe driver constants', () => {
       'mirasim',
       'commandcode',
       'opencode-go',
+      'antigravity',
     ]) {
       expect(PROBE_SUPPORTED_PROVIDERS.has(provider)).toBe(true);
     }
     expect(PROBE_SUPPORTED_PROVIDERS.has('gemini')).toBe(false);
-    expect(PROBE_SUPPORTED_PROVIDERS.has('antigravity')).toBe(false);
   });
 });
 

@@ -91,7 +91,8 @@ func (s *Service) Run(ctx context.Context) error {
 		if s.coreManager == nil {
 			return nil
 		}
-		return modelprobe.HiddenModelIDs(s.coreManager.List())
+		cfg := s.currentConfig()
+		return modelprobe.HiddenModelIDs(s.coreManager.List(), cfg != nil && cfg.ModelProbe.PruneUnusable)
 	})
 
 	s.registerPluginAuthParser()

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelprobe"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -19,6 +20,23 @@ const (
 	modelProbeDefaultInterval    = 6 * time.Hour
 	modelProbeDefaultMaxParallel = 4
 )
+
+// Filter final advertised IDs, including credential prefixes, against the
+// same saved outcomes used by the scheduler and client-facing model lists.
+func filterModelProbeModels(cfg *config.Config, auth *coreauth.Auth, models []*ModelInfo) []*ModelInfo {
+	section := modelprobe.SectionForAuth(auth)
+	if section == nil {
+		return models
+	}
+	if section.IsProviderBlocked() {
+		return nil
+	}
+	models = modelprobe.FilterPrunedBySection(section, models)
+	if cfg != nil && cfg.ModelProbe.PruneUnusable {
+		models = modelprobe.FilterUnusableBySection(section, models)
+	}
+	return models
+}
 
 // modelProbeSchedulerOnce guards the lazy scheduler bootstrap: the service
 // starts the probe scheduler exactly once per process, the first time an
@@ -57,6 +75,7 @@ func (s *Service) ensureModelProbeScheduler(ctx context.Context) {
 		s.modelProbeAuths,
 		s.modelProbeCatalog,
 		modelprobe.SchedulerOptions{
+			PruneUnusable:   s.cfg.ModelProbe.PruneUnusable,
 			Interval:        s.modelProbeInterval(),
 			RecheckInterval: s.modelProbeRecheckInterval(),
 			Jitter:          s.cfg.ModelProbe.Jitter,

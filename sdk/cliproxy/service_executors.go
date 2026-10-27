@@ -499,6 +499,7 @@ func (s *Service) registerResolvedModelsForAuthFenced(a *coreauth.Auth, fence mo
 		clone.ID = modelID
 		normalizedModels = append(normalizedModels, &clone)
 	}
+	normalizedModels = filterModelProbeModels(s.currentConfig(), a, normalizedModels)
 	if len(normalizedModels) == 0 {
 		return s.unregisterModelsForAuthFenced(a, fence)
 	}

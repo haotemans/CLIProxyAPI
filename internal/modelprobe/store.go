@@ -52,7 +52,6 @@ func MergeSections(previous, fresh *Section) *Section {
 	}
 	combined := &Section{
 		CheckedAt:  fresh.CheckedAt,
-		Usable:     append([]string(nil), fresh.Usable...),
 		PerModel:   make(map[string]*ModelOutcome, len(previous.PerModel)+len(fresh.PerModel)),
 		Skipped:    fresh.Skipped,
 		SkipReason: fresh.SkipReason,
@@ -76,6 +75,9 @@ func MergeSections(previous, fresh *Section) *Section {
 		combined.PerModel[id] = outcome
 	}
 	for id, outcome := range combined.PerModel {
+		if outcome != nil && outcome.Status == StatusUsable {
+			combined.Usable = append(combined.Usable, id)
+		}
 		if outcome == nil || outcome.Status != StatusNotAvailable {
 			continue
 		}

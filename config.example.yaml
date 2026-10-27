@@ -1154,6 +1154,7 @@ upstream:
 # probe the full catalog immediately; tiers only shape scheduled cycles.
 # model-probe:
 #   enabled: false                  # default off (safe); probes contact upstreams
+#   prune-unusable: false           # hide failed probes temporarily; automatically restore on success
 #   interval: 86400                 # cycle interval in seconds (24h recommended; default 6h when unset)
 #   recheck-interval: 604800        # known-alive low-frequency re-probe tier + failure-backoff cap, seconds (default 7d when unset)
 #   jitter: 0.5                     # next-start randomization fraction 0-1 (0 = exact fixed cadence = detectable)

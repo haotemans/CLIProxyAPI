@@ -2,6 +2,7 @@ import type { ModelProbeCredentialRow } from './api';
 
 /** Providers with V1 probe drivers in the backend (mirrors internal/modelprobe). */
 export const PROBE_SUPPORTED_PROVIDERS = new Set([
+  'antigravity',
   'cursor',
   'kiro',
   'cline',

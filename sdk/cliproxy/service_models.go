@@ -10,7 +10,6 @@ import (
 	mirasimauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/mirasim"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelconfig"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/modelprobe"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/providers"
 	_ "github.com/router-for-me/CLIProxyAPI/v8/internal/providers/builtin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
@@ -109,21 +108,6 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
 		key := provider
 		if key == "" {
 			key = strings.ToLower(strings.TrimSpace(a.Provider))
-		}
-		// Per-credential probe pruning and block-phase hiding. Models the last
-		// cycle classified not_available drop out; when EVERY outcome is
-		// provider_blocked (e.g. Cline's periodic third-party clampdown), the
-		// credential currently serves nothing and the whole set hides (routing
-		// skips it) while the probe section stays for recovery. Without any
-		// `model_probe` section the catalog passes through unchanged. Sections
-		// resolve through SectionForAuth so config API-key credentials (no
-		// durable auth file) prune from the process-local live overlay too.
-		if probeSection := modelprobe.SectionForAuth(a); probeSection != nil {
-			if probeSection.IsProviderBlocked() {
-				models = nil
-			} else {
-				models = modelprobe.FilterPrunedBySection(probeSection, models)
-			}
 		}
 		models = s.appendPluginModels(key, models, excluded)
 		if len(models) > 0 {
