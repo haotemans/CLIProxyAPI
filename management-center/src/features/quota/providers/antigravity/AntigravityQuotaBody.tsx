@@ -59,10 +59,12 @@ const ANTIGRAVITY_GROUP_LABEL_KEYS = new Map<string, string>([
 
 const ANTIGRAVITY_BUCKET_LABEL_KEYS = new Map<string, string>([
   ['weekly limit', 'weekly_limit'],
+  ['weekly limit remaining', 'weekly_limit'],
   ['daily limit', 'daily_limit'],
   ['5 hour limit', 'five_hour_limit'],
   ['5-hour limit', 'five_hour_limit'],
   ['five hour limit', 'five_hour_limit'],
+  ['five hour limit remaining', 'five_hour_limit'],
   ['monthly limit', 'monthly_limit'],
 ]);
 

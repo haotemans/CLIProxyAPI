@@ -240,15 +240,40 @@ describe('AntigravityQuotaBody', () => {
       status: 'success',
       groups: [
         {
+          id: 'gemini-models',
+          label: 'Gemini Models',
+          description: 'models within this group: Gemini Flash, Gemini Pro',
+          buckets: [
+            {
+              id: 'gemini-weekly',
+              label: 'Weekly Limit Remaining',
+              remainingFraction: 0.85,
+              resetTime: new Date(now + 48 * HOUR_MS).toISOString(),
+            },
+            {
+              id: 'gemini-5h',
+              label: 'Five Hour Limit Remaining',
+              remainingFraction: 0.95,
+              resetTime: new Date(now + 4 * HOUR_MS).toISOString(),
+            },
+          ],
+        },
+        {
           id: 'claude-and-gpt',
           label: 'Claude and GPT models',
           description: 'models within this group: Claude Opus, Claude Sonnet, GPT-OSS',
           buckets: [
             {
-              id: 'five-hour',
+              id: '3p-weekly',
+              label: 'Weekly Limit Remaining',
+              remainingFraction: 1,
+              resetTime: new Date(now + 72 * HOUR_MS).toISOString(),
+            },
+            {
+              id: '3p-5h',
               label: 'Five Hour Limit Remaining',
               remainingFraction: 1,
-              resetTime: new Date(now + 3 * HOUR_MS).toISOString(),
+              resetTime: new Date(now + 5 * HOUR_MS).toISOString(),
             },
           ],
         },
@@ -260,8 +285,11 @@ describe('AntigravityQuotaBody', () => {
     };
 
     const markup = renderToStaticMarkup(createElement(AntigravityQuotaBody, { quota, classes }));
+    expect(markup).toContain('Gemini models');
+    expect(markup).toContain('Gemini Flash, Gemini Pro');
     expect(markup).toContain('Claude and GPT models');
     expect(markup).toContain('Claude Opus, Claude Sonnet, GPT-OSS');
-    expect(markup).not.toContain('Gemini models');
+    expect(markup).toContain('Weekly limit');
+    expect(markup).toContain('5-hour limit');
   });
 });
