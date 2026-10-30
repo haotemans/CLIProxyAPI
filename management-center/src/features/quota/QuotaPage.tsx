@@ -133,6 +133,8 @@ export function QuotaPage() {
   const kimiQuota = useQuotaStore((state) => state.kimiQuota);
   const metaQuota = useQuotaStore((state) => state.metaQuota);
   const xaiQuota = useQuotaStore((state) => state.xaiQuota);
+  const kiroQuota = useQuotaStore((state) => state.kiroQuota);
+  const mirasimQuota = useQuotaStore((state) => state.mirasimQuota);
 
   const quotaByType = useMemo<Record<QuotaProviderType, Record<string, QuotaCardState>>>(
     () =>
@@ -144,13 +146,25 @@ export function QuotaPage() {
         kimi: kimiQuota,
         meta: metaQuota,
         xai: xaiQuota,
+        kiro: kiroQuota,
+        mirasim: mirasimQuota,
       }) as unknown as Record<QuotaProviderType, Record<string, QuotaCardState>>,
-    [antigravityQuota, claudeQuota, codexQuota, devinQuota, kimiQuota, metaQuota, xaiQuota]
+    [
+      antigravityQuota,
+      claudeQuota,
+      codexQuota,
+      devinQuota,
+      kimiQuota,
+      metaQuota,
+      xaiQuota,
+      kiroQuota,
+      mirasimQuota,
+    ]
   );
 
   const getQuota = useCallback(
     (entry: QuotaFileEntry): QuotaCardState | undefined =>
-      quotaByType[entry.type][getQuotaCacheKey(entry.file)],
+      quotaByType[entry.type]?.[getQuotaCacheKey(entry.file)],
     [quotaByType]
   );
 
@@ -209,7 +223,7 @@ export function QuotaPage() {
     let loaded = 0;
     let attention = 0;
     entries.forEach((entry) => {
-      const status = quotaByType[entry.type][getQuotaCacheKey(entry.file)]?.status;
+      const status = quotaByType[entry.type]?.[getQuotaCacheKey(entry.file)]?.status;
       if (status === 'success') loaded += 1;
       else if (status === 'error') attention += 1;
     });
