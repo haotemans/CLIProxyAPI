@@ -461,7 +461,6 @@
     "daily_limit": "日限额",
     "five_hour_limit": "5 小时限额",
     "monthly_limit": "月限额",
-    "unlimited_quota": "不限额度",
     "quota_available": "额度可用",
     "remaining_percent": "剩余 {{percent}}%",
     "refreshes_in": "{{duration}} 后刷新",

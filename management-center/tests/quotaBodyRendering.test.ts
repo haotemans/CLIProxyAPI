@@ -235,7 +235,7 @@ describe('ClaudeQuotaBody', () => {
 });
 
 describe('AntigravityQuotaBody', () => {
-  test('renders synthetic unlimited Gemini models group when upstream returns only Claude and GPT', () => {
+  test('renders upstream quota groups and buckets directly', () => {
     const quota: AntigravityQuotaState = {
       status: 'success',
       groups: [
@@ -260,39 +260,8 @@ describe('AntigravityQuotaBody', () => {
     };
 
     const markup = renderToStaticMarkup(createElement(AntigravityQuotaBody, { quota, classes }));
-    expect(markup).toContain('Gemini models');
-    expect(markup).toContain('Gemini 2.5 Pro, Gemini 2.5 Flash');
-    expect(markup).toContain('Unlimited Quota');
     expect(markup).toContain('Claude and GPT models');
-  });
-
-  test('does not duplicate Gemini models group when upstream explicitly provides one', () => {
-    const quota: AntigravityQuotaState = {
-      status: 'success',
-      groups: [
-        {
-          id: 'gemini-explicit',
-          label: 'Gemini models',
-          description: 'models within this group: Gemini 2.5 Pro',
-          buckets: [
-            {
-              id: 'daily',
-              label: 'Daily limit',
-              remainingFraction: 0.8,
-              resetTime: new Date(now + HOUR_MS).toISOString(),
-            },
-          ],
-        },
-      ],
-      subscription: {
-        plan: 'pro',
-      },
-      serverTimeOffsetMs: 0,
-    };
-
-    const markup = renderToStaticMarkup(createElement(AntigravityQuotaBody, { quota, classes }));
-    const geminiCount = (markup.match(/Gemini models/g) || []).length;
-    expect(geminiCount).toBe(1);
-    expect(markup).not.toContain('Unlimited Quota');
+    expect(markup).toContain('Claude Opus, Claude Sonnet, GPT-OSS');
+    expect(markup).not.toContain('Gemini models');
   });
 });

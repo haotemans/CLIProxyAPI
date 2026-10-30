@@ -463,7 +463,6 @@
     "daily_limit": "Daily limit",
     "five_hour_limit": "5-hour limit",
     "monthly_limit": "Monthly limit",
-    "unlimited_quota": "Unlimited Quota",
     "quota_available": "Quota available",
     "remaining_percent": "{{percent}}% remaining",
     "refreshes_in": "Refreshes in {{duration}}",
