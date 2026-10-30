@@ -466,6 +466,7 @@
     "daily_limit": "Дневной лимит",
     "five_hour_limit": "Лимит на 5 часов",
     "monthly_limit": "Месячный лимит",
+    "unlimited_quota": "Безлимитная квота",
     "quota_available": "Квота доступна",
     "remaining_percent": "Осталось {{percent}}%",
     "refreshes_in": "Обновится через {{duration}}",

@@ -14,10 +14,16 @@ import i18n from '@/i18n';
 import { CodexQuotaBody } from '@/features/quota/providers/codex/CodexQuotaBody';
 import { ClaudeQuotaBody } from '@/features/quota/providers/claude/ClaudeQuotaBody';
 import { KimiQuotaBody } from '@/features/quota/providers/kimi/KimiQuotaBody';
+import { AntigravityQuotaBody } from '@/features/quota/providers/antigravity/AntigravityQuotaBody';
 import { QUOTA_CLASS_KEYS, bindQuotaClasses } from '@/features/quota/types';
 import { formatInstantShort } from '@/utils/quota';
 import { DAY_MS, HOUR_MS } from '@/utils/time/durations';
-import type { ClaudeQuotaState, CodexQuotaState, KimiQuotaState } from '@/types';
+import type {
+  AntigravityQuotaState,
+  ClaudeQuotaState,
+  CodexQuotaState,
+  KimiQuotaState,
+} from '@/types';
 
 const classes = bindQuotaClasses(
   Object.fromEntries(QUOTA_CLASS_KEYS.map((key) => [key, key])),
@@ -225,5 +231,68 @@ describe('ClaudeQuotaBody', () => {
     expect(markup).toContain('08-06 04:00');
     expect(markup).toMatch(/2 hours/);
     expect(markup).toMatch(/4 days/);
+  });
+});
+
+describe('AntigravityQuotaBody', () => {
+  test('renders synthetic unlimited Gemini models group when upstream returns only Claude and GPT', () => {
+    const quota: AntigravityQuotaState = {
+      status: 'success',
+      groups: [
+        {
+          id: 'claude-and-gpt',
+          label: 'Claude and GPT models',
+          description: 'models within this group: Claude Opus, Claude Sonnet, GPT-OSS',
+          buckets: [
+            {
+              id: 'five-hour',
+              label: 'Five Hour Limit Remaining',
+              remainingFraction: 1,
+              resetTime: new Date(now + 3 * HOUR_MS).toISOString(),
+            },
+          ],
+        },
+      ],
+      subscription: {
+        plan: 'pro',
+      },
+      serverTimeOffsetMs: 0,
+    };
+
+    const markup = renderToStaticMarkup(createElement(AntigravityQuotaBody, { quota, classes }));
+    expect(markup).toContain('Gemini models');
+    expect(markup).toContain('Gemini 2.5 Pro, Gemini 2.5 Flash');
+    expect(markup).toContain('Unlimited Quota');
+    expect(markup).toContain('Claude and GPT models');
+  });
+
+  test('does not duplicate Gemini models group when upstream explicitly provides one', () => {
+    const quota: AntigravityQuotaState = {
+      status: 'success',
+      groups: [
+        {
+          id: 'gemini-explicit',
+          label: 'Gemini models',
+          description: 'models within this group: Gemini 2.5 Pro',
+          buckets: [
+            {
+              id: 'daily',
+              label: 'Daily limit',
+              remainingFraction: 0.8,
+              resetTime: new Date(now + HOUR_MS).toISOString(),
+            },
+          ],
+        },
+      ],
+      subscription: {
+        plan: 'pro',
+      },
+      serverTimeOffsetMs: 0,
+    };
+
+    const markup = renderToStaticMarkup(createElement(AntigravityQuotaBody, { quota, classes }));
+    const geminiCount = (markup.match(/Gemini models/g) || []).length;
+    expect(geminiCount).toBe(1);
+    expect(markup).not.toContain('Unlimited Quota');
   });
 });
